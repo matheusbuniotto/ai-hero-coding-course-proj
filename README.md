@@ -11,7 +11,7 @@ Project applying AI Hero Coding Course for 100% of the code generated. Just havi
 - Keep great steer docs / maps
 - **Debug** using request logger to view entire input x output in every request
 - Keep tiny CLAUDE/AGENTS.md - no seedimients, no duplication, no no-ops - point or push
-
+- No harness native memory (I only used once, so no novelty here)
 
 ## What I liked
 
@@ -20,3 +20,6 @@ Project applying AI Hero Coding Course for 100% of the code generated. Just havi
 
 ## Current State
 Just following the course project itself, coming back here later for some personal project that i find fun to do.
+
+## Notes
+I'll only share the main highlights and minimal takeaways here to help me remember the topics, keeping the actual course content private out of respect for Matt.
