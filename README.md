@@ -31,3 +31,4 @@ I'll only share the main highlights and minimal takeaways here to help me rememb
 - Something w/ Lua or Rust
 - Some simple App clone (Build own x)
 - QuantFin w/ Py
+- AI "collab" ICM platform 
