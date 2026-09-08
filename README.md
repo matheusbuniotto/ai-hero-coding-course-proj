@@ -15,6 +15,9 @@ Project applying AI Hero Coding Course for 100% of the code generated. Just havi
 - No harness native memory (I only used once, so no novelty here)
 - Spec & Tickets (dumbzone viable)
 - Issue tracker usage (prefer outside from repo)
+- Vertical Slices of layers
+- TDD & 2-axis review 
+- Spec Done = Spec Closed -> out of the way 
 
 ## What I liked
 
