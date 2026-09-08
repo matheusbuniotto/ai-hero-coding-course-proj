@@ -26,3 +26,8 @@ Just following the course project itself, coming back here later for some person
 
 ## Notes
 I'll only share the main highlights and minimal takeaways here to help me remember the topics, keeping the actual course content private out of respect for Matt.
+
+## Project idea bank
+- Something w/ Lua or Rust
+- Some simple App clone (Build own x)
+- QuantFin w/ Py
