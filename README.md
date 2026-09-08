@@ -13,6 +13,8 @@ Project applying AI Hero Coding Course for 100% of the code generated. Just havi
 - **Debug** using request logger to view entire input x output in every request
 - Keep tiny CLAUDE/AGENTS.md - no seedimients, no duplication, no no-ops - point or push
 - No harness native memory (I only used once, so no novelty here)
+- Spec & Tickets (dumbzone viable)
+- Issue tracker usage (prefer outside from repo)
 
 ## What I liked
 
