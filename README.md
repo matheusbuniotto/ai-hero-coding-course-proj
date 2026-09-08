@@ -3,7 +3,8 @@ Project applying AI Hero Coding Course for 100% of the code generated. Just havi
 
 ## Rules / Learnings that Ill apply
 - Bare minimum stuff (my fav) - remove fluff and bloat from default harness (Mcps, Tools, skills that arent needed) - starting context should be < 25k
-- Keep context usage <= 150k when possible
+- Keep context usage <= 150k when possible (no dumbzone)
+- Constantly thinking about context
 - Grilling instead of Planning
 - Navigation pointers
 - Heavly on context management (clear/handoff/compact)
