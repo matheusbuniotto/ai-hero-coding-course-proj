@@ -1,12 +1,7 @@
 from fastapi.testclient import TestClient
 
+from tests.conftest import sign_in as _sign_in
 from tests.fakes import FakeEmailPort
-
-
-def _sign_in(client: TestClient, email_port: FakeEmailPort, email: str) -> None:
-    client.post("/auth/magic-link", data={"email": email})
-    token = email_port.sent[-1][1].split("token=")[1]
-    client.get(f"/auth/verify?token={token}", follow_redirects=False)
 
 
 def test_propose_approve_updates_canonical_tree_end_to_end(

@@ -1,15 +1,16 @@
-from typing import Annotated
+from collections.abc import Callable
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from icm_platform.deps import get_proposal_service, get_workspace_service, require_user
-from icm_platform.models import FileProposal, User
+from icm_platform.deps import ProposalServiceDep, WorkspaceAccess, WorkspaceAccessDep
+from icm_platform.models import FileProposal, User, Workspace
 from icm_platform.paths import TEMPLATES_DIR
-from icm_platform.proposals.service import ProposalError, ProposalService
-from icm_platform.workspace.service import WorkspaceService
+from icm_platform.proposals.service import ProposalError
+from icm_platform.routes.workspaces import workspace_json
+from icm_platform.workspace.permissions import Permission
 
 router = APIRouter(prefix="/workspace", tags=["workspace"])
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
@@ -33,85 +34,64 @@ def _proposal_json(proposal: FileProposal) -> dict:
 
 
 @router.get("", response_class=HTMLResponse)
-def view_workspace(
-    request: Request,
-    user: Annotated[User, Depends(require_user)],
-    workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
-) -> HTMLResponse:
-    workspace = workspace_service.ensure_personal_workspace(user)
-    tree = workspace_service.get_tree(workspace)
+def view_workspace(request: Request, access: WorkspaceAccessDep) -> HTMLResponse:
+    access.require(Permission.read)
     return templates.TemplateResponse(
-        request, "workspace.html", {"workspace": workspace, "tree": tree}
+        request,
+        "workspace.html",
+        {"workspace": access.workspace, "role": access.role, "tree": access.tree()},
     )
 
 
 @router.get("/api")
-def get_workspace_json(
-    user: Annotated[User, Depends(require_user)],
-    workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
-) -> dict:
-    workspace = workspace_service.ensure_personal_workspace(user)
-    tree = workspace_service.get_tree(workspace)
-    return {"id": workspace.id, "name": workspace.name, "tree": tree}
+def get_workspace_json(access: WorkspaceAccessDep) -> dict:
+    access.require(Permission.read)
+    return workspace_json(access.workspace, access.role) | {"tree": access.tree()}
 
 
 @router.post("/files/propose")
 def propose_file(
-    body: ProposeFileRequest,
-    user: Annotated[User, Depends(require_user)],
-    workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
-    proposal_service: Annotated[ProposalService, Depends(get_proposal_service)],
+    body: ProposeFileRequest, access: WorkspaceAccessDep, proposals: ProposalServiceDep
 ) -> dict:
-    workspace = workspace_service.ensure_personal_workspace(user)
-    proposal = proposal_service.propose(workspace, user, body.path, body.content)
+    access.require(Permission.propose)
+    proposal = proposals.propose(access.workspace, access.user, body.path, body.content)
     return _proposal_json(proposal)
 
 
 @router.get("/proposals")
-def list_proposals(
-    user: Annotated[User, Depends(require_user)],
-    workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
-    proposal_service: Annotated[ProposalService, Depends(get_proposal_service)],
-) -> list[dict]:
-    workspace = workspace_service.ensure_personal_workspace(user)
-    return [_proposal_json(p) for p in proposal_service.list_pending(workspace)]
+def list_proposals(access: WorkspaceAccessDep, proposals: ProposalServiceDep) -> list[dict]:
+    access.require(Permission.read)
+    return [_proposal_json(p) for p in proposals.list_pending(access.workspace)]
 
 
 @router.get("/history")
-def list_history(
-    user: Annotated[User, Depends(require_user)],
-    workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
-    proposal_service: Annotated[ProposalService, Depends(get_proposal_service)],
-) -> list[dict]:
-    workspace = workspace_service.ensure_personal_workspace(user)
-    return [_proposal_json(p) for p in proposal_service.list_history(workspace)]
+def list_history(access: WorkspaceAccessDep, proposals: ProposalServiceDep) -> list[dict]:
+    access.require(Permission.read)
+    return [_proposal_json(p) for p in proposals.list_history(access.workspace)]
 
 
 @router.post("/proposals/{proposal_id}/approve")
 def approve_proposal(
-    proposal_id: int,
-    user: Annotated[User, Depends(require_user)],
-    workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
-    proposal_service: Annotated[ProposalService, Depends(get_proposal_service)],
+    proposal_id: int, access: WorkspaceAccessDep, proposals: ProposalServiceDep
 ) -> dict:
-    workspace = workspace_service.ensure_personal_workspace(user)
-    try:
-        proposal = proposal_service.approve(workspace, user, proposal_id)
-    except ProposalError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _proposal_json(proposal)
+    access.require(Permission.approve)
+    return _resolve(proposals.approve, access, proposal_id)
 
 
 @router.post("/proposals/{proposal_id}/reject")
 def reject_proposal(
-    proposal_id: int,
-    user: Annotated[User, Depends(require_user)],
-    workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
-    proposal_service: Annotated[ProposalService, Depends(get_proposal_service)],
+    proposal_id: int, access: WorkspaceAccessDep, proposals: ProposalServiceDep
 ) -> dict:
-    workspace = workspace_service.ensure_personal_workspace(user)
+    access.require(Permission.approve)
+    return _resolve(proposals.reject, access, proposal_id)
+
+
+Resolver = Callable[[Workspace, User, int], FileProposal]
+
+
+def _resolve(resolve: Resolver, access: WorkspaceAccess, proposal_id: int) -> dict:
     try:
-        proposal = proposal_service.reject(workspace, user, proposal_id)
+        proposal = resolve(access.workspace, access.user, proposal_id)
     except ProposalError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _proposal_json(proposal)

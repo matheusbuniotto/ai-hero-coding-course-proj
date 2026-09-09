@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 .ruff_cache/
 .env
+workspace.db
 PROJ-IDEA.md

@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlmodel import Field, SQLModel, UniqueConstraint
+from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 from icm_platform.security import utcnow
 
@@ -26,10 +26,36 @@ class Session(SQLModel, table=True):
     expires_at: datetime
 
 
+class WorkspaceKind(str, Enum):
+    personal = "personal"
+    team = "team"
+
+
+class WorkspaceRole(str, Enum):
+    owner = "owner"
+    editor = "editor"
+    viewer = "viewer"
+
+
 class Workspace(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    owner_user_id: int = Field(foreign_key="user.id", unique=True)
+    owner_user_id: int = Field(foreign_key="user.id", index=True)
     name: str
+    kind: WorkspaceKind = Field(default=WorkspaceKind.personal)
+
+
+class WorkspaceMember(SQLModel, table=True):
+    """A user's single role on a workspace."""
+
+    __table_args__ = (UniqueConstraint("workspace_id", "user_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="workspace.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    role: WorkspaceRole
+
+    user: User = Relationship()
+    workspace: Workspace = Relationship()
 
 
 class WorkspaceFile(SQLModel, table=True):
