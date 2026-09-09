@@ -16,6 +16,11 @@ class WorkspaceAccessError(Exception):
     """The user may not perform this action on this workspace."""
 
 
+def _org_of(email: str) -> str:
+    """The org a user belongs to, approximated by their email domain."""
+    return email.rsplit("@", 1)[-1].lower()
+
+
 class WorkspaceService:
     def __init__(self, db: DBSession):
         self.db = db
@@ -115,6 +120,33 @@ class WorkspaceService:
             .order_by(WorkspaceFile.path)
         )
         return list(paths)
+
+    def fork_workspace(
+        self, user: User, source_workspace_id: int, name: str, path_prefix: str | None = None
+    ) -> Workspace:
+        """Copy a workspace (or one subfolder of it) into a new one owned by `user`.
+
+        The fork is a one-time snapshot: nothing in it stays linked to the source.
+        """
+        source = self.get_for_user(user, source_workspace_id)
+        owner = self.db.get(User, source.owner_user_id)
+        assert owner is not None
+        if _org_of(owner.email) != _org_of(user.email):
+            raise WorkspaceAccessError("Cannot fork a workspace from a different org")
+
+        fork = self._create(user, name, WorkspaceKind.team)
+        assert fork.id is not None
+        for file in self._files(source, path_prefix):
+            self.db.add(WorkspaceFile(workspace_id=fork.id, path=file.path, content=file.content))
+        self.db.commit()
+        return fork
+
+    def _files(self, workspace: Workspace, path_prefix: str | None) -> list[WorkspaceFile]:
+        query = select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id)
+        if path_prefix is not None:
+            prefix = path_prefix.rstrip("/") + "/"
+            query = query.where(col(WorkspaceFile.path).like(f"{prefix}%"))
+        return list(self.db.exec(query))
 
     def _guard_last_owner(
         self, workspace: Workspace, member: WorkspaceMember, new_role: WorkspaceRole | None

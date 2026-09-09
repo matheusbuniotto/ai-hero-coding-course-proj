@@ -17,6 +17,11 @@ class InviteMemberRequest(BaseModel):
     role: WorkspaceRole
 
 
+class ForkWorkspaceRequest(BaseModel):
+    name: str
+    path_prefix: str | None = None
+
+
 def workspace_json(workspace: Workspace, role: WorkspaceRole) -> dict:
     return {"id": workspace.id, "name": workspace.name, "kind": workspace.kind, "role": role}
 
@@ -55,3 +60,14 @@ def remove_member(user_id: int, access: WorkspaceAccessDep) -> dict:
     access.require(Permission.manage_members)
     access.remove_member(user_id)
     return {"removed_user_id": user_id}
+
+
+@router.post("/{workspace_id}/fork")
+def fork_workspace(
+    workspace_id: int,
+    body: ForkWorkspaceRequest,
+    user: CurrentUser,
+    service: WorkspaceServiceDep,
+) -> dict:
+    fork = service.fork_workspace(user, workspace_id, body.name, body.path_prefix)
+    return workspace_json(fork, WorkspaceRole.owner)
