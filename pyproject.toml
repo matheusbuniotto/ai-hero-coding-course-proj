@@ -1,15 +1,21 @@
 [project]
-name = "ai-hero-coding-couse-proj"
+name = "icm-platform"
 version = "0.1.0"
 description = "Add your description here"
 authors = [
     { name = "Matheus Buniotto", email = "matheus.buniotto@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.141.1",
+    "jinja2>=3.1.6",
+    "python-multipart>=0.0.32",
+    "sqlmodel>=0.0.42",
+    "uvicorn[standard]>=0.52.4",
+]
 
 [project.scripts]
-ai-hero-coding-couse-proj = "ai_hero_coding_couse_proj:main"
+icm-platform = "icm_platform:main"
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]
@@ -20,6 +26,9 @@ dev = [
     "ruff>=0.13",
     "ty>=0.0.1a12",
     "detect-secrets>=1.5",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "httpx>=0.28.1",
 ]
 
 [tool.ruff]

@@ -1,0 +1,11 @@
+<!doctype html>
+<html>
+  <head><title>{{ workspace.name }}</title></head>
+  <body>
+    <h1>{{ workspace.name }}</h1>
+    <form method="post" action="/auth/logout"><button type="submit">Log out</button></form>
+    <ul id="folder-tree">
+      {% for entry in tree %}<li>{{ entry }}</li>{% else %}<li><em>Empty workspace</em></li>{% endfor %}
+    </ul>
+  </body>
+</html>
