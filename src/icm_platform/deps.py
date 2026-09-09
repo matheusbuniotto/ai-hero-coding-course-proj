@@ -6,6 +6,7 @@ from icm_platform.auth.ports import ConsoleEmailPort, EmailPort
 from icm_platform.auth.service import AuthService
 from icm_platform.db import DBSessionDep
 from icm_platform.models import User
+from icm_platform.proposals.service import ProposalService
 from icm_platform.workspace.service import WorkspaceService
 
 SESSION_COOKIE = "session_token"
@@ -23,6 +24,10 @@ def get_auth_service(
 
 def get_workspace_service(db: DBSessionDep) -> WorkspaceService:
     return WorkspaceService(db)
+
+
+def get_proposal_service(db: DBSessionDep) -> ProposalService:
+    return ProposalService(db)
 
 
 def get_current_user(

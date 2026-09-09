@@ -1,7 +1,7 @@
 from sqlmodel import Session as DBSession
 from sqlmodel import select
 
-from icm_platform.models import User, Workspace
+from icm_platform.models import User, Workspace, WorkspaceFile
 
 
 class WorkspaceService:
@@ -23,5 +23,10 @@ class WorkspaceService:
         return workspace
 
     def get_tree(self, workspace: Workspace) -> list[str]:
-        """Folder tree for the workspace. Empty until folder creation ships."""
-        return []
+        """Paths of the workspace's canonical (approved) files, sorted."""
+        paths = self.db.exec(
+            select(WorkspaceFile.path)
+            .where(WorkspaceFile.workspace_id == workspace.id)
+            .order_by(WorkspaceFile.path)
+        )
+        return list(paths)

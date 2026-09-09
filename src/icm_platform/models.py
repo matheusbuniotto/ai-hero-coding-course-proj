@@ -1,6 +1,9 @@
 from datetime import datetime
+from enum import Enum
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, UniqueConstraint
+
+from icm_platform.security import utcnow
 
 
 class User(SQLModel, table=True):
@@ -27,3 +30,41 @@ class Workspace(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     owner_user_id: int = Field(foreign_key="user.id", unique=True)
     name: str
+
+
+class WorkspaceFile(SQLModel, table=True):
+    """Canonical (approved) content of a file, keyed by workspace + path."""
+
+    __table_args__ = (UniqueConstraint("workspace_id", "path"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="workspace.id", index=True)
+    path: str = Field(index=True)
+    content: str
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class ProposalStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+    superseded = "superseded"
+
+
+class FileProposal(SQLModel, table=True):
+    """A proposed edit to a single file, awaiting approve/reject.
+
+    A new pending proposal for the same (workspace, path) supersedes any
+    existing pending one for that path — there is no branching/merge.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="workspace.id", index=True)
+    path: str = Field(index=True)
+    proposed_by_user_id: int = Field(foreign_key="user.id")
+    base_content: str | None
+    proposed_content: str
+    status: ProposalStatus = Field(default=ProposalStatus.pending)
+    created_at: datetime = Field(default_factory=utcnow)
+    resolved_at: datetime | None = None
+    resolved_by_user_id: int | None = Field(default=None, foreign_key="user.id")
