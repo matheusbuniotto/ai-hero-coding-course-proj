@@ -94,3 +94,25 @@ class FileProposal(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
     resolved_at: datetime | None = None
     resolved_by_user_id: int | None = Field(default=None, foreign_key="user.id")
+
+
+class AgentSession(SQLModel, table=True):
+    """A conversational, read-only chat session between a user and their workspace agent."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="workspace.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class AgentMessageRole(str, Enum):
+    user = "user"
+    assistant = "assistant"
+
+
+class AgentMessage(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="agentsession.id", index=True)
+    role: AgentMessageRole
+    content: str
+    created_at: datetime = Field(default_factory=utcnow)

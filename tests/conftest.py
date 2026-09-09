@@ -9,8 +9,8 @@ from sqlmodel.pool import StaticPool
 
 from icm_platform.app import create_app
 from icm_platform.db import get_db_session
-from icm_platform.deps import get_email_port
-from tests.fakes import FakeEmailPort
+from icm_platform.deps import get_agent_harness_port, get_email_port
+from tests.fakes import FakeAgentHarnessPort, FakeEmailPort
 
 
 @pytest.fixture
@@ -29,8 +29,13 @@ def email_port() -> FakeEmailPort:
 
 
 @pytest.fixture
+def agent_harness() -> FakeAgentHarnessPort:
+    return FakeAgentHarnessPort()
+
+
+@pytest.fixture
 def client_factory(
-    db_session: DBSession, email_port: FakeEmailPort
+    db_session: DBSession, email_port: FakeEmailPort, agent_harness: FakeAgentHarnessPort
 ) -> Iterator[Callable[[], TestClient]]:
     """Builds independent clients (separate cookie jars) over one shared database."""
     with ExitStack() as stack:
@@ -39,6 +44,7 @@ def client_factory(
             app = create_app()
             app.dependency_overrides[get_db_session] = lambda: db_session
             app.dependency_overrides[get_email_port] = lambda: email_port
+            app.dependency_overrides[get_agent_harness_port] = lambda: agent_harness
             return stack.enter_context(TestClient(app))
 
         yield make_client

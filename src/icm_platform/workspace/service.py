@@ -114,12 +114,11 @@ class WorkspaceService:
 
     def get_tree(self, workspace: Workspace) -> list[str]:
         """Paths of the workspace's canonical (approved) files, sorted."""
-        paths = self.db.exec(
-            select(WorkspaceFile.path)
-            .where(WorkspaceFile.workspace_id == workspace.id)
-            .order_by(WorkspaceFile.path)
-        )
-        return list(paths)
+        return [f.path for f in self.list_files(workspace)]
+
+    def list_files(self, workspace: Workspace) -> list[WorkspaceFile]:
+        """The workspace's canonical (approved) files, sorted by path."""
+        return self._files(workspace, path_prefix=None)
 
     def fork_workspace(
         self, user: User, source_workspace_id: int, name: str, path_prefix: str | None = None
@@ -146,6 +145,7 @@ class WorkspaceService:
         if path_prefix is not None:
             prefix = path_prefix.rstrip("/") + "/"
             query = query.where(col(WorkspaceFile.path).like(f"{prefix}%"))
+        query = query.order_by(WorkspaceFile.path)
         return list(self.db.exec(query))
 
     def _guard_last_owner(

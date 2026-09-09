@@ -1,8 +1,12 @@
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
+from icm_platform.agent.ports import AgentHarnessPort
+from icm_platform.agent.pydantic_harness import PydanticAgentHarness
+from icm_platform.agent.service import AgentSessionService
 from icm_platform.auth.ports import ConsoleEmailPort, EmailPort
 from icm_platform.auth.service import AuthService
 from icm_platform.db import DBSessionDep
@@ -32,6 +36,19 @@ def get_proposal_service(db: DBSessionDep) -> ProposalService:
     return ProposalService(db)
 
 
+@lru_cache
+def get_agent_harness_port() -> AgentHarnessPort:
+    return PydanticAgentHarness()
+
+
+def get_agent_session_service(
+    db: DBSessionDep,
+    workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
+    harness: Annotated[AgentHarnessPort, Depends(get_agent_harness_port)],
+) -> AgentSessionService:
+    return AgentSessionService(db, workspace_service, harness)
+
+
 def get_current_user(
     request: Request, auth_service: Annotated[AuthService, Depends(get_auth_service)]
 ) -> User | None:
@@ -50,6 +67,7 @@ def require_user(user: Annotated[User | None, Depends(get_current_user)]) -> Use
 CurrentUser = Annotated[User, Depends(require_user)]
 WorkspaceServiceDep = Annotated[WorkspaceService, Depends(get_workspace_service)]
 ProposalServiceDep = Annotated[ProposalService, Depends(get_proposal_service)]
+AgentSessionServiceDep = Annotated[AgentSessionService, Depends(get_agent_session_service)]
 
 
 @dataclass(frozen=True)
