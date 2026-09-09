@@ -24,3 +24,10 @@ New findings from `detect-secrets` must be reviewed and either removed or, if th
 ```bash
 uv run detect-secrets scan --baseline .secrets.baseline
 ```
+
+## Code Standarts
+
+- Pythonic code, do not try to force non-pythonic behaviour into python synxta.
+- Beutiful code is a must
+- Do NOT overcomment, code must be self-explanatory
+- Follow the zen of python for python code.
