@@ -1,0 +1,40 @@
+[project]
+name = "ai-hero-coding-couse-proj"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Matheus Buniotto", email = "matheus.buniotto@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+ai-hero-coding-couse-proj = "ai_hero_coding_couse_proj:main"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.13",
+    "ty>=0.0.1a12",
+    "detect-secrets>=1.5",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "C901", "PLR0913", "PLR0911", "PLR0915"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 6
+
+[tool.ruff.lint.pylint]
+max-args = 4
+max-returns = 4
+max-statements = 30
+
+
