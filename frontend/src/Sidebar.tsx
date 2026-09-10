@@ -5,11 +5,20 @@ import type { TreeNode } from "./fileTree";
 interface SidebarProps {
   workspace: WorkspaceDetail | null;
   activePath?: string | null;
+  activeAgent?: string | null;
   pendingPaths: ReadonlySet<string>;
   onSelectFile: (path: string) => void;
+  onSelectAgent: (name: string) => void;
 }
 
-export function Sidebar({ workspace, activePath, pendingPaths, onSelectFile }: SidebarProps) {
+export function Sidebar({
+  workspace,
+  activePath,
+  activeAgent,
+  pendingPaths,
+  onSelectFile,
+  onSelectAgent,
+}: SidebarProps) {
   if (!workspace) return <aside className="sidebar" aria-busy="true" />;
 
   return (
@@ -20,7 +29,15 @@ export function Sidebar({ workspace, activePath, pendingPaths, onSelectFile }: S
       ) : (
         <ul className="agents" aria-label="Agents">
           {workspace.agents.map((name) => (
-            <li key={name}>{name}</li>
+            <li key={name}>
+              <button
+                type="button"
+                className={`agent-link${name === activeAgent ? " active" : ""}`}
+                onClick={() => onSelectAgent(name)}
+              >
+                {name}
+              </button>
+            </li>
           ))}
         </ul>
       )}

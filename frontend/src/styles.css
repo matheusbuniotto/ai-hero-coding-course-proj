@@ -197,3 +197,115 @@ body {
   font-size: 15px;
   margin: 0;
 }
+
+.agent-link {
+  display: block;
+  width: 100%;
+  padding: 0.1rem 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-link.active {
+  font-weight: 600;
+}
+
+.chat-column {
+  width: 420px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.chat-empty {
+  margin: auto 0;
+  text-align: center;
+}
+
+.chat-transcript {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.chat-ended {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: #fdf0d5;
+  color: #9a6700;
+}
+
+.chat-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.turn {
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+
+.turn p {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+}
+
+.turn-role {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.turn-user {
+  background: #eeeef2;
+}
+
+.turn-assistant {
+  background: #eaf3ff;
+}
+
+.turn-pending {
+  opacity: 0.6;
+}
+
+.turn-error {
+  color: #b4232c;
+}
+
+.turn-tool-activity {
+  margin: 0.25rem 0 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  background: #1c1c20;
+  color: #e2e2e6;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.chat-composer {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+}
+
+.chat-composer textarea {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}

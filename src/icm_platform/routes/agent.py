@@ -45,6 +45,7 @@ def _session_json(session: AgentSession) -> dict:
         "workspace_id": session.workspace_id,
         "agent_name": session.agent_name,
         "created_at": session.created_at.isoformat(),
+        "ended_at": session.ended_at.isoformat() if session.ended_at else None,
     }
 
 
@@ -129,9 +130,18 @@ def list_agents(access: WorkspaceAccessDep, workspaces: WorkspaceServiceDep) -> 
 def start_session(
     body: StartSessionRequest, access: WorkspaceAccessDep, agent: AgentSessionServiceDep
 ) -> dict:
-    access.require(Permission.read)
+    access.require(Permission.propose)
     session = agent.start_session(access.workspace, access.user, body.agent_name)
     return _session_json(session)
+
+
+@router.get("/sessions")
+def list_sessions(
+    agent_name: str, access: WorkspaceAccessDep, agent: AgentSessionServiceDep
+) -> list[dict]:
+    """This workspace's sessions with `agent_name`, most recent first."""
+    access.require(Permission.read)
+    return [_session_json(s) for s in agent.list_for_workspace(access.workspace, agent_name)]
 
 
 @router.post("/sessions/{session_id}/messages")
@@ -141,7 +151,7 @@ def send_message(
     access: WorkspaceAccessDep,
     agent: AgentSessionServiceDep,
 ) -> dict:
-    access.require(Permission.read)
+    access.require(Permission.propose)
     try:
         reply = agent.send_message(access.workspace, session, body.message)
     except SessionEndedError as exc:

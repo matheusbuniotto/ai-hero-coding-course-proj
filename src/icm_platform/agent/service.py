@@ -47,6 +47,19 @@ class AgentSessionService:
             raise AgentSessionError(f"No session {session_id} in this workspace")
         return session
 
+    def list_for_workspace(self, workspace: Workspace, agent_name: str) -> list[AgentSession]:
+        """This workspace's sessions with the named agent, most recent first.
+
+        Lets a reload find the live one to resume instead of starting a new session.
+        """
+        sessions = self.db.exec(
+            select(AgentSession)
+            .where(AgentSession.workspace_id == workspace.id)
+            .where(AgentSession.agent_name == agent_name)
+            .order_by(col(AgentSession.id).desc())
+        )
+        return list(sessions)
+
     def list_messages(self, session: AgentSession) -> list[AgentMessage]:
         messages = self.db.exec(
             select(AgentMessage)

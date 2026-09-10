@@ -29,6 +29,23 @@ export interface FileContent {
   content: string;
 }
 
+export type AgentMessageRole = "user" | "assistant";
+
+export interface AgentSessionSummary {
+  id: number;
+  workspace_id: number;
+  agent_name: string;
+  created_at: string;
+  ended_at: string | null;
+}
+
+export interface AgentMessage {
+  id: number;
+  role: AgentMessageRole;
+  content: string;
+  created_at: string;
+}
+
 export const LOGIN_URL = "/auth/login";
 
 /** Thrown when the API answers 401; the caller has already been sent to the login page. */
@@ -82,4 +99,25 @@ export const api = {
 
   forkWorkspace: (workspaceId: number, name: string) =>
     post<WorkspaceSummary>(`/workspaces/${workspaceId}/fork`, { name }),
+
+  listSessions: (workspaceId: number, agentName: string) =>
+    request<AgentSessionSummary[]>(
+      `/workspace/agent/sessions?workspace_id=${workspaceId}&agent_name=${encodeURIComponent(agentName)}`,
+    ),
+
+  startSession: (workspaceId: number, agentName: string) =>
+    post<AgentSessionSummary>(`/workspace/agent/sessions?workspace_id=${workspaceId}`, {
+      agent_name: agentName,
+    }),
+
+  sessionMessages: (workspaceId: number, sessionId: number) =>
+    request<AgentMessage[]>(
+      `/workspace/agent/sessions/${sessionId}/messages?workspace_id=${workspaceId}`,
+    ),
+
+  sendMessage: (workspaceId: number, sessionId: number, message: string) =>
+    post<AgentMessage>(
+      `/workspace/agent/sessions/${sessionId}/messages?workspace_id=${workspaceId}`,
+      { message },
+    ),
 };

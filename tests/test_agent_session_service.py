@@ -207,6 +207,35 @@ def test_a_session_without_a_sandbox_stays_read_only(db_session: DBSession) -> N
     assert "You cannot write files or run code." in instructions
 
 
+def test_list_for_workspace_returns_sessions_for_that_agent_most_recent_first(
+    db_session: DBSession,
+) -> None:
+    user = _user(db_session, "walker@example.com")
+    workspaces = WorkspaceService(db_session)
+    workspace = workspaces.ensure_personal_workspace(user)
+    service = AgentSessionService(db_session, workspaces, FakeAgentHarnessPort())
+
+    first = service.start_session(workspace, user, "support")
+    second = service.start_session(workspace, user, "support")
+    service.start_session(workspace, user, "docs")
+
+    sessions = service.list_for_workspace(workspace, "support")
+
+    assert [s.id for s in sessions] == [second.id, first.id]
+
+
+def test_list_for_workspace_is_scoped_to_the_workspace(db_session: DBSession) -> None:
+    owner = _user(db_session, "owner@example.com")
+    other = _user(db_session, "other@example.com")
+    workspaces = WorkspaceService(db_session)
+    workspace = workspaces.ensure_personal_workspace(owner)
+    other_workspace = workspaces.ensure_personal_workspace(other)
+    service = AgentSessionService(db_session, workspaces, FakeAgentHarnessPort())
+    service.start_session(workspace, owner, "support")
+
+    assert service.list_for_workspace(other_workspace, "support") == []
+
+
 def test_list_agents_returns_sorted_subfolder_names(db_session: DBSession) -> None:
     user = _user(db_session, "walker@example.com")
     workspaces = WorkspaceService(db_session)

@@ -2,6 +2,7 @@ import { NavLink, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "./api";
 import type { FileContent, Me, WorkspaceDetail } from "./api";
+import { Chat } from "./Chat";
 import { Sidebar } from "./Sidebar";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { VIEWS } from "./views";
@@ -16,6 +17,7 @@ interface ShellProps {
 }
 
 const FILE_PARAM = "file";
+const AGENT_PARAM = "agent";
 
 export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
   const workspace = useAsync(() => api.workspace(workspaceId), [workspaceId]);
@@ -23,6 +25,7 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const openPath = searchParams.get(FILE_PARAM);
+  const activeAgent = searchParams.get(AGENT_PARAM);
 
   const pendingPaths = new Set((pending.data ?? []).map((p) => p.path));
 
@@ -33,6 +36,12 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
   function closeFile() {
     const next = new URLSearchParams(searchParams);
     next.delete(FILE_PARAM);
+    setSearchParams(next);
+  }
+
+  function selectAgent(name: string) {
+    const next = new URLSearchParams(searchParams);
+    next.set(AGENT_PARAM, name);
     setSearchParams(next);
   }
 
@@ -66,8 +75,10 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
           <Sidebar
             workspace={workspace.data}
             activePath={view === "library" ? openPath : null}
+            activeAgent={activeAgent}
             pendingPaths={pendingPaths}
             onSelectFile={openFile}
+            onSelectAgent={selectAgent}
           />
           <main className="main">
             <ViewPanel
@@ -79,6 +90,11 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
               onCloseFile={closeFile}
             />
           </main>
+          <Chat
+            workspaceId={workspaceId}
+            agentName={activeAgent}
+            role={workspace.data?.role ?? "viewer"}
+          />
         </div>
       )}
     </div>
