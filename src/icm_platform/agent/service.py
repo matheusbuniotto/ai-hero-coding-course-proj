@@ -1,9 +1,11 @@
 from sqlmodel import Session as DBSession
 from sqlmodel import col, select
 
-from icm_platform.agent.ports import AgentHarnessPort, ChatTurn
+from icm_platform.agent.execution import CodeExecutionService, summarize
+from icm_platform.agent.ports import AgentHarnessPort, ChatTurn, CodeRunner
 from icm_platform.models import AgentMessage, AgentMessageRole, AgentSession, User, Workspace
-from icm_platform.workspace.service import WorkspaceService
+from icm_platform.workspace.permissions import Permission
+from icm_platform.workspace.service import WorkspaceAccessError, WorkspaceService
 
 
 class AgentSessionError(Exception):
@@ -11,10 +13,17 @@ class AgentSessionError(Exception):
 
 
 class AgentSessionService:
-    def __init__(self, db: DBSession, workspaces: WorkspaceService, harness: AgentHarnessPort):
+    def __init__(
+        self,
+        db: DBSession,
+        workspaces: WorkspaceService,
+        harness: AgentHarnessPort,
+        executions: CodeExecutionService | None = None,
+    ):
         self.db = db
         self.workspaces = workspaces
         self.harness = harness
+        self.executions = executions
 
     def start_session(self, workspace: Workspace, user: User, agent_name: str) -> AgentSession:
         """Start a session scoped to one agent subfolder (`agents/<agent_name>/...`)."""
@@ -50,21 +59,49 @@ class AgentSessionService:
         instructions = self._instructions(workspace, session.agent_name)
 
         self._store(session, AgentMessageRole.user, message)
-        reply = self.harness.reply(instructions, history, message)
+        reply = self.harness.reply(
+            instructions, history, message, self._code_runner(workspace, session)
+        )
         return self._store(session, AgentMessageRole.assistant, reply)
 
+    def _code_runner(self, workspace: Workspace, session: AgentSession) -> CodeRunner | None:
+        """What the harness may call to run code, or None when the session is read-only."""
+        executions = self.executions
+        if executions is None:
+            return None
+        user = self.db.get(User, session.user_id)
+
+        def run_code(command: str) -> str:
+            if user is None:
+                return f"$ {command}\nrefused: this session has no signed-in user"
+            try:
+                self.workspaces.require(workspace, user, Permission.run)
+            except WorkspaceAccessError as exc:
+                return f"$ {command}\nrefused: {exc}"
+            return summarize(executions.execute(workspace, session, command))
+
+        return run_code
+
     def _instructions(self, workspace: Workspace, agent_name: str) -> str:
+        capability = (
+            "You cannot write files or run code."
+            if self.executions is None
+            else (
+                "You cannot write to the workspace, but you may run commands in a sandbox "
+                "on an ephemeral copy of these files."
+            )
+        )
         files = self.workspaces.list_agent_files(workspace, agent_name)
         if not files:
             return (
-                f"You are the '{agent_name}' read-only assistant for this workspace, which "
-                "has no instruction files yet. Say so if asked about workspace content."
+                f"You are the '{agent_name}' assistant for this workspace, which "
+                f"has no instruction files yet. Say so if asked about workspace content. "
+                f"{capability}"
             )
         sections = "\n\n---\n\n".join(f"# {f.path}\n\n{f.content}" for f in files)
         return (
-            f"You are the '{agent_name}' read-only assistant for this workspace. Ground "
-            "every answer in the instruction files below. You cannot write files or run "
-            "code.\n\n" + sections
+            f"You are the '{agent_name}' assistant for this workspace. Ground "
+            f"every answer in the instruction files below. {capability}\n\n" + sections
         )
 
     def _store(self, session: AgentSession, role: AgentMessageRole, content: str) -> AgentMessage:

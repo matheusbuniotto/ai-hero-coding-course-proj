@@ -117,3 +117,49 @@ class AgentMessage(SQLModel, table=True):
     role: AgentMessageRole
     content: str
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class SessionFile(SQLModel, table=True):
+    """One file of a session's ephemeral working copy.
+
+    Seeded from the workspace's canonical files and then changed freely by
+    code execution. Nothing here reaches the canonical tree without going
+    through the propose/approve flow.
+    """
+
+    __table_args__ = (UniqueConstraint("session_id", "path"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="agentsession.id", index=True)
+    path: str = Field(index=True)
+    content: str
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class CodeExecutionStatus(str, Enum):
+    succeeded = "succeeded"
+    failed = "failed"
+    errored = "errored"
+
+
+class CodeExecution(SQLModel, table=True):
+    """One command run in the sandbox on a session's working copy.
+
+    `failed` means the command ran and exited non-zero; `errored` means the
+    sandbox provider never ran it, in which case `exit_code` is None.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="agentsession.id", index=True)
+    command: str
+    status: CodeExecutionStatus
+    exit_code: int | None = None
+    stdout: str = ""
+    stderr: str = ""
+    produced_paths: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
+
+    @property
+    def produced(self) -> list[str]:
+        """Paths the run created or changed in the working copy."""
+        return self.produced_paths.split("\n") if self.produced_paths else []

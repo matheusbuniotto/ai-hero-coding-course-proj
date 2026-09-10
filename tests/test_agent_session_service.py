@@ -1,11 +1,13 @@
 import pytest
 from sqlmodel import Session as DBSession
 
+from icm_platform.agent.execution import CodeExecutionService
 from icm_platform.agent.service import AgentSessionError, AgentSessionService
-from icm_platform.models import AgentMessageRole, User
+from icm_platform.models import AgentMessageRole, User, WorkspaceRole
 from icm_platform.proposals.service import ProposalService
+from icm_platform.sandbox.ports import SandboxResult
 from icm_platform.workspace.service import WorkspaceService
-from tests.fakes import FakeAgentHarnessPort
+from tests.fakes import FakeAgentHarnessPort, FakeSandboxPort
 
 
 def _user(db_session: DBSession, email: str) -> User:
@@ -135,6 +137,73 @@ def test_agent_name_with_like_wildcards_cannot_leak_other_agents_context(
     reply = service.send_message(workspace, session, "hi")
 
     assert "no instruction files yet" in reply.content
+
+
+def test_agent_can_request_code_execution_and_sees_the_result(db_session: DBSession) -> None:
+    user = _user(db_session, "walker@example.com")
+    workspaces = WorkspaceService(db_session)
+    workspace = workspaces.ensure_personal_workspace(user)
+    sandbox = FakeSandboxPort(
+        [SandboxResult(exit_code=0, stdout="ahoy\n", stderr="", files=[])],
+    )
+    executions = CodeExecutionService(db_session, workspaces, sandbox)
+    harness = FakeAgentHarnessPort(run_commands=["python greet.py"])
+    service = AgentSessionService(db_session, workspaces, harness, executions)
+    session = service.start_session(workspace, user, "support")
+
+    reply = service.send_message(workspace, session, "run the greeter")
+
+    assert "$ python greet.py" in reply.content
+    assert "ahoy" in reply.content
+    assert [e.command for e in executions.list_executions(session)] == ["python greet.py"]
+
+
+def test_a_failed_run_reaches_the_conversation_instead_of_raising(db_session: DBSession) -> None:
+    user = _user(db_session, "walker@example.com")
+    workspaces = WorkspaceService(db_session)
+    workspace = workspaces.ensure_personal_workspace(user)
+    sandbox = FakeSandboxPort(error="provider unreachable")
+    executions = CodeExecutionService(db_session, workspaces, sandbox)
+    harness = FakeAgentHarnessPort(run_commands=["python greet.py"])
+    service = AgentSessionService(db_session, workspaces, harness, executions)
+    session = service.start_session(workspace, user, "support")
+
+    reply = service.send_message(workspace, session, "run the greeter")
+
+    assert "sandbox unavailable: provider unreachable" in reply.content
+
+
+def test_a_viewer_agent_session_cannot_run_code(db_session: DBSession) -> None:
+    owner = _user(db_session, "owner@example.com")
+    viewer = _user(db_session, "viewer@example.com")
+    workspaces = WorkspaceService(db_session)
+    workspace = workspaces.create_team_workspace(owner, "Team")
+    workspaces.invite_member(workspace, viewer.email, WorkspaceRole.viewer)
+    sandbox = FakeSandboxPort()
+    executions = CodeExecutionService(db_session, workspaces, sandbox)
+    harness = FakeAgentHarnessPort(run_commands=["python greet.py"])
+    service = AgentSessionService(db_session, workspaces, harness, executions)
+    session = service.start_session(workspace, viewer, "support")
+
+    reply = service.send_message(workspace, session, "run the greeter")
+
+    assert "refused" in reply.content
+    assert sandbox.calls == []
+
+
+def test_a_session_without_a_sandbox_stays_read_only(db_session: DBSession) -> None:
+    user = _user(db_session, "walker@example.com")
+    workspaces = WorkspaceService(db_session)
+    workspace = workspaces.ensure_personal_workspace(user)
+    harness = FakeAgentHarnessPort(run_commands=["python greet.py"])
+    service = AgentSessionService(db_session, workspaces, harness)
+    session = service.start_session(workspace, user, "support")
+
+    reply = service.send_message(workspace, session, "run the greeter")
+
+    assert "$ python greet.py" not in reply.content
+    instructions, _, _ = harness.calls[0]
+    assert "You cannot write files or run code." in instructions
 
 
 def test_list_agents_returns_sorted_subfolder_names(db_session: DBSession) -> None:

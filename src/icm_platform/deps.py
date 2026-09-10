@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
+from icm_platform.agent.execution import CodeExecutionService
 from icm_platform.agent.ports import AgentHarnessPort
 from icm_platform.agent.pydantic_harness import PydanticAgentHarness
 from icm_platform.agent.service import AgentSessionService
@@ -12,6 +13,7 @@ from icm_platform.auth.service import AuthService
 from icm_platform.db import DBSessionDep
 from icm_platform.models import User, Workspace, WorkspaceMember, WorkspaceRole
 from icm_platform.proposals.service import ProposalService
+from icm_platform.sandbox.ports import SandboxPort, UnavailableSandbox
 from icm_platform.workspace.permissions import Permission
 from icm_platform.workspace.service import WorkspaceAccessError, WorkspaceService
 
@@ -41,12 +43,27 @@ def get_agent_harness_port() -> AgentHarnessPort:
     return PydanticAgentHarness()
 
 
+@lru_cache
+def get_sandbox_port() -> SandboxPort:
+    """The hosted sandbox provider. Swap this binding to plug one in."""
+    return UnavailableSandbox()
+
+
+def get_code_execution_service(
+    db: DBSessionDep,
+    workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
+    sandbox: Annotated[SandboxPort, Depends(get_sandbox_port)],
+) -> CodeExecutionService:
+    return CodeExecutionService(db, workspace_service, sandbox)
+
+
 def get_agent_session_service(
     db: DBSessionDep,
     workspace_service: Annotated[WorkspaceService, Depends(get_workspace_service)],
     harness: Annotated[AgentHarnessPort, Depends(get_agent_harness_port)],
+    executions: Annotated[CodeExecutionService, Depends(get_code_execution_service)],
 ) -> AgentSessionService:
-    return AgentSessionService(db, workspace_service, harness)
+    return AgentSessionService(db, workspace_service, harness, executions)
 
 
 def get_current_user(
@@ -68,6 +85,7 @@ CurrentUser = Annotated[User, Depends(require_user)]
 WorkspaceServiceDep = Annotated[WorkspaceService, Depends(get_workspace_service)]
 ProposalServiceDep = Annotated[ProposalService, Depends(get_proposal_service)]
 AgentSessionServiceDep = Annotated[AgentSessionService, Depends(get_agent_session_service)]
+CodeExecutionServiceDep = Annotated[CodeExecutionService, Depends(get_code_execution_service)]
 
 
 @dataclass(frozen=True)
