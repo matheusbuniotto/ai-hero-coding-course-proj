@@ -67,6 +67,7 @@ def _execution_json(execution: CodeExecution) -> dict:
         "stdout": execution.stdout,
         "stderr": execution.stderr,
         "produced": execution.produced,
+        "duration_ms": execution.duration_ms,
         "created_at": execution.created_at.isoformat(),
     }
 

@@ -2,12 +2,17 @@ import { useEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "./api";
 import type { AgentMessage, AgentSessionSummary, WorkspaceRole } from "./api";
+import type { ChatWidth } from "./layout";
+import { useActiveSession } from "./useActiveSession";
 import { useAsync } from "./useAsync";
 
 interface ChatProps {
   workspaceId: number;
   agentName: string | null;
   role: WorkspaceRole;
+  width?: ChatWidth;
+  onWidthChange?: (width: ChatWidth) => void;
+  canHide?: boolean;
 }
 
 /** A turn already confirmed by the server, or one still in flight / failed locally. */
@@ -16,18 +21,42 @@ type Turn =
   | { kind: "pending"; id: string; content: string }
   | { kind: "error"; id: string; content: string; detail: string };
 
-export function Chat({ workspaceId, agentName, role }: ChatProps) {
-  const sessions = useAsync<AgentSessionSummary[]>(
-    () => (agentName ? api.listSessions(workspaceId, agentName) : Promise.resolve([])),
-    [workspaceId, agentName],
-  );
-
-  // Sessions come back most-recent-first; the live one (if any) is the one to resume.
-  const session = sessions.data?.find((s) => s.ended_at === null) ?? sessions.data?.[0] ?? null;
+export function Chat({
+  workspaceId,
+  agentName,
+  role,
+  width = "normal",
+  onWidthChange,
+  canHide = true,
+}: ChatProps) {
+  const sessions = useActiveSession(workspaceId, agentName);
+  const session = sessions.session;
   const canSend = role !== "viewer" && session !== null && !isEnded(session);
 
   return (
-    <aside className="chat-column" aria-label="Agent session">
+    <aside className={`chat-column chat-${width}`} aria-label="Agent session">
+      {onWidthChange && (
+        <div className="chat-controls">
+          <button
+            type="button"
+            className="chat-widen"
+            aria-label={width === "wide" ? "Narrow chat" : "Widen chat"}
+            onClick={() => onWidthChange(width === "wide" ? "normal" : "wide")}
+          >
+            {width === "wide" ? "⇤" : "⇥"}
+          </button>
+          <button
+            type="button"
+            className="chat-hide"
+            aria-label="Hide chat"
+            onClick={() => onWidthChange("hidden")}
+            disabled={!canHide}
+            title={canHide ? undefined : "At least one pane must stay open"}
+          >
+            ×
+          </button>
+        </div>
+      )}
       {!agentName ? (
         <p className="notice">Select an agent to start a session.</p>
       ) : sessions.error ? (

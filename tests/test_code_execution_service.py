@@ -65,6 +65,7 @@ def test_execution_runs_on_a_copy_of_the_agents_canonical_files(db_session: DBSe
     assert execution.status == CodeExecutionStatus.succeeded
     assert execution.exit_code == 0
     assert execution.stdout == "ahoy\n"
+    assert execution.duration_ms >= 0
     command, files = sandbox.calls[0]
     assert command == "python greet.py"
     assert [(f.path, f.content) for f in files] == [("agents/support/greet.py", "print('ahoy')")]
@@ -174,6 +175,7 @@ def test_a_sandbox_provider_failure_is_recorded_and_the_session_survives(
     assert execution.status == CodeExecutionStatus.errored
     assert execution.exit_code is None
     assert "provider unreachable" in execution.stderr
+    assert execution.duration_ms >= 0
     assert [e.id for e in fixture.executions.list_executions(fixture.session)] == [execution.id]
 
 

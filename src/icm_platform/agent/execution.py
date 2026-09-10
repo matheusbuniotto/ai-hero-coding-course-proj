@@ -1,3 +1,5 @@
+import time
+
 from sqlmodel import Session as DBSession
 from sqlmodel import col, select
 
@@ -12,6 +14,10 @@ from icm_platform.models import (
 from icm_platform.sandbox.ports import SandboxError, SandboxFile, SandboxPort
 from icm_platform.security import utcnow
 from icm_platform.workspace.service import WorkspaceService
+
+
+def _elapsed_ms(started: float) -> int:
+    return round((time.monotonic() - started) * 1000)
 
 
 class CodeExecutionService:
@@ -56,6 +62,7 @@ class CodeExecutionService:
         require_open(session)
         assert session.id is not None
         files = [SandboxFile(path=f.path, content=f.content) for f in self._session_files(session)]
+        started = time.monotonic()
         try:
             result = self.sandbox.run(command, files)
         except SandboxError as exc:
@@ -65,6 +72,7 @@ class CodeExecutionService:
                     command=command,
                     status=CodeExecutionStatus.errored,
                     stderr=str(exc),
+                    duration_ms=_elapsed_ms(started),
                 )
             )
 
@@ -81,6 +89,7 @@ class CodeExecutionService:
                 stdout=result.stdout,
                 stderr=result.stderr,
                 produced_paths="\n".join(produced),
+                duration_ms=_elapsed_ms(started),
             )
         )
 

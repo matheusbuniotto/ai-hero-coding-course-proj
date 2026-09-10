@@ -1,8 +1,12 @@
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "./api";
 import type { FileContent, Me, WorkspaceDetail } from "./api";
 import { Chat } from "./Chat";
+import { canClose, closedPanes, PANE_LABELS } from "./layout";
+import type { ChatWidth, PaneState } from "./layout";
+import { OutputPanel } from "./OutputPanel";
 import { Sidebar } from "./Sidebar";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { VIEWS } from "./views";
@@ -18,6 +22,8 @@ interface ShellProps {
 
 const FILE_PARAM = "file";
 const AGENT_PARAM = "agent";
+const OUTPUT_PARAM = "output";
+const CHAT_PARAM = "chat";
 
 export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
   const workspace = useAsync(() => api.workspace(workspaceId), [workspaceId]);
@@ -26,14 +32,23 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const openPath = searchParams.get(FILE_PARAM);
   const activeAgent = searchParams.get(AGENT_PARAM);
+  const outputOpen = searchParams.get(OUTPUT_PARAM) === "1";
+  const chatWidth = asChatWidth(searchParams.get(CHAT_PARAM));
+  const [lastFilePath, setLastFilePath] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (openPath) setLastFilePath(openPath);
+  }, [openPath]);
 
   const pendingPaths = new Set((pending.data ?? []).map((p) => p.path));
+  const paneState: PaneState = { fileOpen: openPath !== null, outputOpen, chatWidth };
 
   function openFile(path: string) {
     navigate(`/w/${workspaceId}/library?${FILE_PARAM}=${encodeURIComponent(path)}`);
   }
 
   function closeFile() {
+    if (!canClose(paneState, "file")) return;
     const next = new URLSearchParams(searchParams);
     next.delete(FILE_PARAM);
     setSearchParams(next);
@@ -43,6 +58,33 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
     const next = new URLSearchParams(searchParams);
     next.set(AGENT_PARAM, name);
     setSearchParams(next);
+  }
+
+  function openOutput() {
+    const next = new URLSearchParams(searchParams);
+    next.set(OUTPUT_PARAM, "1");
+    setSearchParams(next);
+  }
+
+  function closeOutput() {
+    if (!canClose(paneState, "output")) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete(OUTPUT_PARAM);
+    setSearchParams(next);
+  }
+
+  function setChatWidth(width: ChatWidth) {
+    if (width === "hidden" && !canClose(paneState, "chat")) return;
+    const next = new URLSearchParams(searchParams);
+    if (width === "normal") next.delete(CHAT_PARAM);
+    else next.set(CHAT_PARAM, width);
+    setSearchParams(next);
+  }
+
+  function reopen(pane: "file" | "output" | "chat") {
+    if (pane === "output") openOutput();
+    else if (pane === "chat") setChatWidth("normal");
+    else if (lastFilePath) openFile(lastFilePath);
   }
 
   return (
@@ -71,33 +113,89 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
       {workspace.error ? (
         <p className="notice">{workspace.error}</p>
       ) : (
-        <div className="body">
-          <Sidebar
-            workspace={workspace.data}
-            activePath={view === "library" ? openPath : null}
-            activeAgent={activeAgent}
-            pendingPaths={pendingPaths}
-            onSelectFile={openFile}
-            onSelectAgent={selectAgent}
-          />
-          <main className="main">
-            <ViewPanel
-              view={view}
+        <>
+          <div className="body">
+            <Sidebar
               workspace={workspace.data}
-              workspaceId={workspaceId}
-              openPath={openPath}
+              activePath={view === "library" ? openPath : null}
+              activeAgent={activeAgent}
               pendingPaths={pendingPaths}
-              onCloseFile={closeFile}
+              onSelectFile={openFile}
+              onSelectAgent={selectAgent}
             />
-          </main>
-          <Chat
-            workspaceId={workspaceId}
-            agentName={activeAgent}
-            role={workspace.data?.role ?? "viewer"}
-          />
-        </div>
+            <div className="workspace-panes">
+              <main className="main">
+                <ViewPanel
+                  view={view}
+                  workspace={workspace.data}
+                  workspaceId={workspaceId}
+                  openPath={openPath}
+                  pendingPaths={pendingPaths}
+                  onCloseFile={closeFile}
+                  canCloseFile={canClose(paneState, "file")}
+                  outputOpen={outputOpen}
+                  onOpenOutput={openOutput}
+                />
+              </main>
+              {outputOpen && (
+                <OutputPanel
+                  workspaceId={workspaceId}
+                  agentName={activeAgent}
+                  onClose={closeOutput}
+                  canClose={canClose(paneState, "output")}
+                />
+              )}
+            </div>
+            {chatWidth !== "hidden" && (
+              <Chat
+                workspaceId={workspaceId}
+                agentName={activeAgent}
+                role={workspace.data?.role ?? "viewer"}
+                width={chatWidth}
+                onWidthChange={setChatWidth}
+                canHide={canClose(paneState, "chat")}
+              />
+            )}
+          </div>
+          <StatusBar paneState={paneState} onReopen={reopen} canReopenFile={lastFilePath !== null} />
+        </>
       )}
     </div>
+  );
+}
+
+function asChatWidth(value: string | null): ChatWidth {
+  return value === "wide" || value === "hidden" ? value : "normal";
+}
+
+function StatusBar({
+  paneState,
+  onReopen,
+  canReopenFile,
+}: {
+  paneState: PaneState;
+  onReopen: (pane: "file" | "output" | "chat") => void;
+  canReopenFile: boolean;
+}) {
+  // A file that was never opened isn't a "closed pane" with something to reopen.
+  const closed = closedPanes(paneState).filter((pane) => pane !== "file" || canReopenFile);
+  return (
+    <footer className="statusbar" aria-label="Closed panes">
+      {closed.length === 0 ? (
+        <span className="statusbar-empty">All panes open</span>
+      ) : (
+        closed.map((pane) => (
+          <button
+            key={pane}
+            type="button"
+            className="statusbar-item"
+            onClick={() => onReopen(pane)}
+          >
+            Show {PANE_LABELS[pane]}
+          </button>
+        ))
+      )}
+    </footer>
   );
 }
 
@@ -121,6 +219,9 @@ interface ViewPanelProps {
   openPath: string | null;
   pendingPaths: ReadonlySet<string>;
   onCloseFile: () => void;
+  canCloseFile: boolean;
+  outputOpen: boolean;
+  onOpenOutput: () => void;
 }
 
 function ViewPanel({
@@ -130,6 +231,9 @@ function ViewPanel({
   openPath,
   pendingPaths,
   onCloseFile,
+  canCloseFile,
+  outputOpen,
+  onOpenOutput,
 }: ViewPanelProps) {
   if (!workspace) return <p className="notice">Loading…</p>;
   if (view === "library") {
@@ -140,6 +244,9 @@ function ViewPanel({
         openPath={openPath}
         pendingPaths={pendingPaths}
         onCloseFile={onCloseFile}
+        canCloseFile={canCloseFile}
+        outputOpen={outputOpen}
+        onOpenOutput={onOpenOutput}
       />
     );
   }
@@ -159,12 +266,18 @@ function Library({
   openPath,
   pendingPaths,
   onCloseFile,
+  canCloseFile,
+  outputOpen,
+  onOpenOutput,
 }: {
   workspace: WorkspaceDetail;
   workspaceId: number;
   openPath: string | null;
   pendingPaths: ReadonlySet<string>;
   onCloseFile: () => void;
+  canCloseFile: boolean;
+  outputOpen: boolean;
+  onOpenOutput: () => void;
 }) {
   if (openPath) {
     return (
@@ -173,6 +286,7 @@ function Library({
         path={openPath}
         inReview={pendingPaths.has(openPath)}
         onClose={onCloseFile}
+        canClose={canCloseFile}
       />
     );
   }
@@ -190,6 +304,11 @@ function Library({
           sidebar.
         </p>
       )}
+      {!outputOpen && (
+        <button type="button" className="show-output" onClick={onOpenOutput}>
+          Show sandbox output
+        </button>
+      )}
     </section>
   );
 }
@@ -199,11 +318,13 @@ function FileTab({
   path,
   inReview,
   onClose,
+  canClose,
 }: {
   workspaceId: number;
   path: string;
   inReview: boolean;
   onClose: () => void;
+  canClose: boolean;
 }) {
   const file = useAsync<FileContent>(() => api.fileContent(workspaceId, path), [
     workspaceId,
@@ -221,7 +342,14 @@ function FileTab({
             </span>
           )}
         </span>
-        <button type="button" className="file-tab-close" aria-label={`Close ${path}`} onClick={onClose}>
+        <button
+          type="button"
+          className="file-tab-close"
+          aria-label={`Close ${path}`}
+          onClick={onClose}
+          disabled={!canClose}
+          title={canClose ? undefined : "At least one pane must stay open"}
+        >
           ×
         </button>
       </div>

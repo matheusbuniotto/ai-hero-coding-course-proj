@@ -44,6 +44,7 @@ def test_execution_result_and_produced_files_are_visible_in_the_session(
     assert execution["exit_code"] == 0
     assert execution["stdout"] == "ahoy\n"
     assert execution["produced"] == ["agents/support/out.txt"]
+    assert execution["duration_ms"] >= 0
 
     listed = client.get(f"/workspace/agent/sessions/{session_id}/executions").json()
     assert [e["command"] for e in listed] == ["python agents/support/greet.py"]

@@ -107,7 +107,7 @@ describe("the workspace shell", () => {
     renderAt("/w/1/library");
 
     const review = await screen.findByRole("link", { name: /Review/ });
-    expect(within(review).getByText("2")).toBeDefined();
+    expect(await within(review).findByText("2")).toBeDefined();
   });
 
   it("keeps the linked workspace when the URL names a view that does not exist", async () => {
@@ -271,5 +271,77 @@ describe("reading a file in the library", () => {
     fireEvent.click(await screen.findByRole("button", { name: /notes\.md/ }));
 
     expect(await screen.findByText(/# Notes/)).toBeDefined();
+  });
+});
+
+describe("pane layout", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({
+        "/me": ME,
+        "/workspace/api": WORKSPACE,
+        "/workspace/agent/sessions": [],
+      }),
+    );
+  });
+
+  it("opens the sandbox output panel from its own control, and closes it again", async () => {
+    renderAt("/w/1/library");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Show sandbox output" }));
+    expect(await screen.findByRole("region", { name: "Sandbox output" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close sandbox output" }));
+    expect(screen.queryByRole("region", { name: "Sandbox output" })).toBeNull();
+  });
+
+  it("lists a closed pane in the status bar and reopens it from there", async () => {
+    renderAt("/w/1/library");
+    const statusbar = within(await screen.findByRole("contentinfo", { name: "Closed panes" }));
+
+    // The output panel starts closed, so the status bar already offers a way to it.
+    expect(await statusbar.findByText("Show Sandbox output")).toBeDefined();
+    fireEvent.click(statusbar.getByText("Show Sandbox output"));
+
+    expect(await screen.findByRole("region", { name: "Sandbox output" })).toBeDefined();
+    expect(statusbar.queryByText("Show Sandbox output")).toBeNull();
+  });
+
+  it("refuses to close the chat once it is the only visible pane", async () => {
+    renderAt("/w/1/library");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Hide chat" }));
+
+    // Chat and its hide control are still there — the close was a no-op.
+    expect(await screen.findByRole("complementary", { name: "Agent session" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Hide chat" })).toHaveProperty("disabled", true);
+  });
+
+  it("widens the chat and then restores it", async () => {
+    renderAt("/w/1/library");
+
+    const widen = await screen.findByRole("button", { name: "Widen chat" });
+    fireEvent.click(widen);
+    expect(await screen.findByRole("complementary", { name: "Agent session" })).toHaveProperty(
+      "className",
+      "chat-column chat-wide",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Narrow chat" }));
+    expect(await screen.findByRole("complementary", { name: "Agent session" })).toHaveProperty(
+      "className",
+      "chat-column chat-normal",
+    );
+  });
+
+  it("survives a reload by keeping pane state in the URL", async () => {
+    renderAt("/w/1/library?output=1&chat=wide");
+
+    expect(await screen.findByRole("region", { name: "Sandbox output" })).toBeDefined();
+    expect(await screen.findByRole("complementary", { name: "Agent session" })).toHaveProperty(
+      "className",
+      "chat-column chat-wide",
+    );
   });
 });

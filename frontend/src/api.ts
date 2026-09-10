@@ -46,6 +46,20 @@ export interface AgentMessage {
   created_at: string;
 }
 
+export type CodeExecutionStatus = "succeeded" | "failed" | "errored";
+
+export interface CodeExecution {
+  id: number;
+  command: string;
+  status: CodeExecutionStatus;
+  exit_code: number | null;
+  stdout: string;
+  stderr: string;
+  produced: string[];
+  duration_ms: number;
+  created_at: string;
+}
+
 export const LOGIN_URL = "/auth/login";
 
 /** Thrown when the API answers 401; the caller has already been sent to the login page. */
@@ -119,5 +133,10 @@ export const api = {
     post<AgentMessage>(
       `/workspace/agent/sessions/${sessionId}/messages?workspace_id=${workspaceId}`,
       { message },
+    ),
+
+  listExecutions: (workspaceId: number, sessionId: number) =>
+    request<CodeExecution[]>(
+      `/workspace/agent/sessions/${sessionId}/executions?workspace_id=${workspaceId}`,
     ),
 };
