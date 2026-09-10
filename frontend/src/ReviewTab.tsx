@@ -66,23 +66,26 @@ function ProposalEntry({
 
   return (
     <li className="proposal-entry">
-      <div className="proposal-entry-bar">
-        <span className="proposal-entry-path">{proposal.path}</span>
-        {canApprove && (
-          <div className="proposal-entry-actions">
-            <button type="button" onClick={() => approve.run()} disabled={busy}>
-              Approve
-            </button>
-            <button type="button" onClick={() => reject.run()} disabled={busy}>
-              Reject
-            </button>
-          </div>
-        )}
-      </div>
+      <DiffView
+        path={proposal.path}
+        base={proposal.base_content}
+        proposed={proposal.proposed_content}
+        headerActions={
+          canApprove ? (
+            <div className="proposal-entry-actions">
+              <button type="button" onClick={() => approve.run()} disabled={busy}>
+                Approve
+              </button>
+              <button type="button" onClick={() => reject.run()} disabled={busy}>
+                Reject
+              </button>
+            </div>
+          ) : undefined
+        }
+      />
       {(approve.error ?? reject.error) && (
         <p className="notice error">{approve.error ?? reject.error}</p>
       )}
-      <DiffView base={proposal.base_content} proposed={proposal.proposed_content} />
     </li>
   );
 }

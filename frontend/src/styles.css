@@ -680,8 +680,44 @@ textarea:focus {
 
 .diff-view {
   margin: 0.5rem 0 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.diff-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: var(--highlight-low);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.3rem 0.5rem;
+}
+
+.diff-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: inherit;
+  padding: 0;
+}
+
+.diff-view-chevron {
+  color: var(--muted);
+  width: 0.8rem;
+  display: inline-block;
+}
+
+.diff-view-body {
+  margin: 0;
   padding: 0.5rem 0.6rem;
-  border-radius: 6px;
+  border-radius: 0 0 var(--radius) var(--radius);
   background: #1c1c20;
   color: #e2e2e6;
   font-size: 0.85rem;
@@ -689,13 +725,32 @@ textarea:focus {
   overflow-x: auto;
 }
 
+.diff-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .diff-line {
+  display: flex;
   white-space: pre-wrap;
+}
+
+.diff-line-num {
+  display: inline-block;
+  min-width: 2.2rem;
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 0.5rem;
+  color: var(--muted);
+  user-select: none;
+  white-space: nowrap;
 }
 
 .diff-marker {
   display: inline-block;
   width: 1rem;
+  flex-shrink: 0;
   color: var(--muted);
 }
 

@@ -316,15 +316,18 @@ function SessionProposalCard({
         <ul className="session-proposal-files">
           {changes.map((change) => (
             <li key={change.proposal_id}>
-              <div className="session-proposal-file-bar">
-                <span>{change.path}</span>
-                {change.status !== "pending" && (
-                  <span className={`history-entry-status history-status-${change.status}`}>
-                    {change.status}
-                  </span>
-                )}
-              </div>
-              <DiffView base={change.base_content} proposed={change.proposed_content} />
+              <DiffView
+                path={change.path}
+                base={change.base_content}
+                proposed={change.proposed_content}
+                headerActions={
+                  change.status !== "pending" ? (
+                    <span className={`history-entry-status history-status-${change.status}`}>
+                      {change.status}
+                    </span>
+                  ) : undefined
+                }
+              />
             </li>
           ))}
         </ul>
