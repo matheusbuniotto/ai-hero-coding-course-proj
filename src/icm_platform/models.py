@@ -97,7 +97,11 @@ class FileProposal(SQLModel, table=True):
 
 
 class AgentSession(SQLModel, table=True):
-    """A conversational, read-only chat session between a user and their workspace agent."""
+    """A conversation between a user and their workspace agent.
+
+    Anything the session does to files happens in its own working copy
+    (`SessionFile`), never in the workspace's canonical tree.
+    """
 
     id: int | None = Field(default=None, primary_key=True)
     workspace_id: int = Field(foreign_key="workspace.id", index=True)
@@ -163,3 +167,21 @@ class CodeExecution(SQLModel, table=True):
     def produced(self) -> list[str]:
         """Paths the run created or changed in the working copy."""
         return self.produced_paths.split("\n") if self.produced_paths else []
+
+    def report(self) -> str:
+        """A plain-text account of the run, for showing inside the conversation."""
+        if self.status is CodeExecutionStatus.errored:
+            return f"$ {self.command}\nsandbox unavailable: {self.stderr}"
+        parts = [f"$ {self.command}", f"exit code: {self.exit_code}"]
+        if self.stdout:
+            parts.append(f"stdout:\n{self.stdout}")
+        if self.stderr:
+            parts.append(f"stderr:\n{self.stderr}")
+        if self.produced:
+            parts.append("files: " + ", ".join(self.produced))
+        return "\n".join(parts)
+
+
+def refusal(command: str, reason: str) -> str:
+    """The same report shape as a real run, for a command that never got to run."""
+    return f"$ {command}\nrefused: {reason}"

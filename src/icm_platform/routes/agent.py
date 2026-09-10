@@ -116,7 +116,7 @@ def execute_code(
 ) -> dict:
     """Run a command in the session's sandbox. A failed run is a 200 with `status`."""
     access.require(Permission.run)
-    return _execution_json(executions.execute(access.workspace, session, body.command))
+    return _execution_json(executions.execute(session, body.command))
 
 
 @router.get("/sessions/{session_id}/executions")
@@ -133,5 +133,5 @@ def list_working_copy(
 ) -> list[dict]:
     """The session's ephemeral working copy — never the workspace's canonical tree."""
     access.require(Permission.read)
-    files = executions.list_working_copy(access.workspace, session)
+    files = executions.list_working_copy(session)
     return [{"path": f.path, "content": f.content} for f in files]

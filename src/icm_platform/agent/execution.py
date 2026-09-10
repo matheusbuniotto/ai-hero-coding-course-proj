@@ -13,20 +13,6 @@ from icm_platform.security import utcnow
 from icm_platform.workspace.service import WorkspaceService
 
 
-def summarize(execution: CodeExecution) -> str:
-    """A plain-text account of a run, for showing inside the conversation."""
-    if execution.status is CodeExecutionStatus.errored:
-        return f"$ {execution.command}\nsandbox unavailable: {execution.stderr}"
-    parts = [f"$ {execution.command}", f"exit code: {execution.exit_code}"]
-    if execution.stdout:
-        parts.append(f"stdout:\n{execution.stdout}")
-    if execution.stderr:
-        parts.append(f"stderr:\n{execution.stderr}")
-    if execution.produced:
-        parts.append("files: " + ", ".join(execution.produced))
-    return "\n".join(parts)
-
-
 class CodeExecutionService:
     """Runs commands for a session in a hosted sandbox, on the session's working copy.
 
@@ -40,10 +26,21 @@ class CodeExecutionService:
         self.workspaces = workspaces
         self.sandbox = sandbox
 
-    def execute(self, workspace: Workspace, session: AgentSession, command: str) -> CodeExecution:
+    def open_working_copy(self, workspace: Workspace, session: AgentSession) -> None:
+        """Snapshot the agent's canonical files into this session's working copy.
+
+        Taken once, when the session starts, so later canonical changes can't
+        leak into a session already in progress.
+        """
+        assert session.id is not None
+        for file in self.workspaces.list_agent_files(workspace, session.agent_name):
+            self.db.add(SessionFile(session_id=session.id, path=file.path, content=file.content))
+        self.db.commit()
+
+    def execute(self, session: AgentSession, command: str) -> CodeExecution:
         """Run `command` in the sandbox, recording the outcome even when it fails."""
         assert session.id is not None
-        files = self._working_copy(workspace, session)
+        files = [SandboxFile(path=f.path, content=f.content) for f in self._session_files(session)]
         try:
             result = self.sandbox.run(command, files)
         except SandboxError as exc:
@@ -80,24 +77,8 @@ class CodeExecutionService:
         )
         return list(executions)
 
-    def list_working_copy(self, workspace: Workspace, session: AgentSession) -> list[SessionFile]:
-        """The session's ephemeral files, seeding them from the canonical tree if needed."""
-        self._working_copy(workspace, session)
-        return self._session_files(session)
-
-    def _working_copy(self, workspace: Workspace, session: AgentSession) -> list[SandboxFile]:
-        files = self._session_files(session)
-        if not files:
-            files = self._seed(workspace, session)
-        return [SandboxFile(path=f.path, content=f.content) for f in files]
-
-    def _seed(self, workspace: Workspace, session: AgentSession) -> list[SessionFile]:
-        """Snapshot the agent's canonical files into this session's working copy."""
-        assert session.id is not None
-        canonical = self.workspaces.list_agent_files(workspace, session.agent_name)
-        for file in canonical:
-            self.db.add(SessionFile(session_id=session.id, path=file.path, content=file.content))
-        self.db.commit()
+    def list_working_copy(self, session: AgentSession) -> list[SessionFile]:
+        """The session's ephemeral files as they stand now."""
         return self._session_files(session)
 
     def _apply(self, session: AgentSession, produced: list[SandboxFile]) -> list[str]:

@@ -1,9 +1,16 @@
 from sqlmodel import Session as DBSession
 from sqlmodel import col, select
 
-from icm_platform.agent.execution import CodeExecutionService, summarize
+from icm_platform.agent.execution import CodeExecutionService
 from icm_platform.agent.ports import AgentHarnessPort, ChatTurn, CodeRunner
-from icm_platform.models import AgentMessage, AgentMessageRole, AgentSession, User, Workspace
+from icm_platform.models import (
+    AgentMessage,
+    AgentMessageRole,
+    AgentSession,
+    User,
+    Workspace,
+    refusal,
+)
 from icm_platform.workspace.permissions import Permission
 from icm_platform.workspace.service import WorkspaceAccessError, WorkspaceService
 
@@ -33,6 +40,8 @@ class AgentSessionService:
         self.db.add(session)
         self.db.commit()
         self.db.refresh(session)
+        if self.executions is not None:
+            self.executions.open_working_copy(workspace, session)
         return session
 
     def get_for_workspace(self, workspace: Workspace, session_id: int) -> AgentSession:
@@ -70,15 +79,14 @@ class AgentSessionService:
         if executions is None:
             return None
         user = self.db.get(User, session.user_id)
+        assert user is not None
 
         def run_code(command: str) -> str:
-            if user is None:
-                return f"$ {command}\nrefused: this session has no signed-in user"
             try:
                 self.workspaces.require(workspace, user, Permission.run)
             except WorkspaceAccessError as exc:
-                return f"$ {command}\nrefused: {exc}"
-            return summarize(executions.execute(workspace, session, command))
+                return refusal(command, str(exc))
+            return executions.execute(session, command).report()
 
         return run_code
 

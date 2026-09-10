@@ -6,6 +6,7 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, Text
 from pydantic_ai.models import Model
 
 from icm_platform.agent.ports import ChatTurn, CodeRunner
+from icm_platform.models import refusal
 
 DEFAULT_MODEL = "openai:gpt-5.2"
 
@@ -42,7 +43,7 @@ class PydanticAgentHarness:
         def run_code(ctx: RunContext[HarnessDeps], command: str) -> str:
             """Run a shell command in the session's sandbox and return its output."""
             if ctx.deps.run_code is None:
-                return f"$ {command}\nrefused: this session cannot run code"
+                return refusal(command, "this session cannot run code")
             return ctx.deps.run_code(command)
 
     def reply(
