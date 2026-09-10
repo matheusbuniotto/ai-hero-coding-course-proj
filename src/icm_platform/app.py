@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
@@ -16,6 +18,11 @@ def create_app() -> FastAPI:
     app.include_router(workspace_router)
     app.include_router(workspaces_router)
     app.include_router(agent_router)
+
+    if os.getenv("ICM_ENV") != "production":  # PROTOTYPE — throwaway, never in production
+        from icm_platform.routes.workspace_ui_prototype import router as prototype_router
+
+        app.include_router(prototype_router)
 
     @app.exception_handler(WorkspaceAccessError)
     def handle_access_error(request: Request, exc: Exception) -> JSONResponse:

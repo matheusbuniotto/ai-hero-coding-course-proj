@@ -1,0 +1,622 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Not production code.
+  Three variants of the workspace UI, switchable via ?variant=A|B|C on
+  /prototype/workspace-ui. Mock data, in-memory only, no auth, no DB.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>PROTOTYPE — workspace UI ({{ variant }})</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+      button { font: inherit; cursor: pointer; }
+      pre { margin: 0; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .del { background: #ffe3e3; color: #9b1c1c; }
+      .add { background: #e0f5e4; color: #16643a; }
+
+      /* ---------- floating switcher (deliberately ugly — not the design) ---------- */
+      #switcher {
+        position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+        z-index: 999; display: flex; align-items: center; gap: 4px;
+        background: #111; color: #fff; border-radius: 999px; padding: 6px 8px;
+        box-shadow: 0 8px 30px rgba(0,0,0,.45); font-size: 13px;
+      }
+      #switcher button {
+        background: #333; color: #fff; border: 0; border-radius: 999px;
+        width: 28px; height: 28px; line-height: 1;
+      }
+      #switcher span { padding: 0 10px; white-space: nowrap; }
+      #switcher em { color: #ff9f43; font-style: normal; }
+
+      /* ---------- state readout (shared, every variant) ---------- */
+      #state-readout {
+        position: fixed; right: 0; bottom: 0; z-index: 998; max-width: 380px;
+        font: 11px/1.45 ui-monospace, Menlo, monospace; background: #1b1b1b; color: #b9f6c9;
+        border-top-left-radius: 8px; box-shadow: -4px -4px 20px rgba(0,0,0,.3);
+      }
+      #state-readout summary { cursor: pointer; color: #ff9f43; padding: 6px 10px; }
+      #state-readout pre { padding: 0 10px 10px; max-height: 40vh; overflow: auto; color: #b9f6c9; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <details id="state-readout">
+      <summary>state</summary>
+      <pre id="state-dump"></pre>
+    </details>
+
+    <div id="switcher">
+      <button id="prev" title="previous variant">‹</button>
+      <span>PROTOTYPE · <em id="variant-label"></em></span>
+      <button id="next" title="next variant">›</button>
+    </div>
+
+    <script>
+      // ------------------------------------------------------------------
+      // Mock state. In-memory only; reload resets it.
+      // ------------------------------------------------------------------
+      const S = {
+        workspace: { name: "Revenue Ops", kind: "team", role: "owner", members: 6 },
+        agents: [
+          { name: "onboarding", files: 7, blurb: "Walks new AEs through the ramp checklist." },
+          { name: "forecasting", files: 12, blurb: "Builds the weekly pipeline forecast." },
+        ],
+        activeAgent: "forecasting",
+        tree: [
+          { path: "AGENTS.md", kind: "instr" },
+          { path: "forecasting/AGENTS.md", kind: "instr", dirty: true },
+          { path: "forecasting/references/pipeline-stages.md", kind: "instr" },
+          { path: "forecasting/references/quota-rules.md", kind: "instr", dirty: true },
+          { path: "forecasting/data/q3-close.csv", kind: "content" },
+          { path: "onboarding/AGENTS.md", kind: "instr" },
+          { path: "onboarding/references/tooling.md", kind: "instr" },
+        ],
+        openFile: "forecasting/AGENTS.md",
+        fileBody:
+          "# Forecasting agent\n\nYou build the weekly pipeline forecast for Revenue Ops.\n\n" +
+          "## Rules\n- Always weight by stage probability in references/pipeline-stages.md.\n" +
+          "- Never include deals with a close date in the past.\n- Round to the nearest $1k.\n",
+        session: {
+          id: 41,
+          state: "live",           // live | proposed
+          agent: "forecasting",
+          messages: [
+            { role: "user", text: "Recompute the Q3 forecast and fix whatever's wrong with the stage weights." },
+            { role: "agent", text: "Reading the instruction tree (4 files) and forecasting/data/q3-close.csv." },
+            { role: "exec", text: "python weight_check.py", exit: 0, out: "3 stages mis-weighted: Discovery 0.4→0.2, POC 0.6→0.5, Legal 0.9→0.85" },
+            { role: "agent", text: "Stage weights in references/pipeline-stages.md disagreed with the CRM export. I corrected them, added a rounding rule to forecasting/AGENTS.md, and wrote the recomputed forecast." },
+            { role: "exec", text: "python forecast.py --quarter Q3", exit: 0, out: "Q3 weighted pipeline: $2,418,000 (was $2,905,000)" },
+          ],
+        },
+        // The consolidated session diff — one proposal, many files, all-or-nothing.
+        proposal: {
+          id: 17,
+          status: "pending",
+          author: "agent (session 41)",
+          age: "2 min ago",
+          files: [
+            {
+              path: "forecasting/references/pipeline-stages.md",
+              hunks: [["-", "Discovery: 0.4"], ["+", "Discovery: 0.2"], [" ", "Qualified: 0.5"], ["-", "POC: 0.6"], ["+", "POC: 0.5"]],
+            },
+            {
+              path: "forecasting/AGENTS.md",
+              hunks: [[" ", "- Never include deals with a close date in the past."], ["+", "- Round to the nearest $1k."]],
+            },
+            { path: "forecasting/data/q3-forecast.md", hunks: [["+", "# Q3 forecast"], ["+", "Weighted pipeline: $2,418,000"]] },
+          ],
+        },
+        // Every command the agent ran in this session's sandbox.
+        executions: [
+          { at: "14:01:40", cmd: "pip install pandas", exit: 0, ms: 4210, out: "Successfully installed pandas-2.2.3" },
+          { at: "14:02:11", cmd: "python weight_check.py", exit: 0, ms: 812,
+            out: "3 stages mis-weighted: Discovery 0.4→0.2, POC 0.6→0.5, Legal 0.9→0.85" },
+          { at: "14:02:44", cmd: "python forecast.py --quarter Q4", exit: 1, ms: 190,
+            err: "FileNotFoundError: forecasting/data/q4-close.csv" },
+          { at: "14:03:02", cmd: "python forecast.py --quarter Q3", exit: 0, ms: 1533,
+            out: "Q3 weighted pipeline: $2,418,000 (was $2,905,000)\nwrote forecasting/data/q3-forecast.md" },
+        ],
+        history: [
+          { id: 16, path: "onboarding/AGENTS.md", verb: "approved", who: "you", when: "yesterday" },
+          { id: 15, path: "forecasting/references/quota-rules.md", verb: "rejected", who: "you", when: "2 days ago" },
+          { id: 14, path: "AGENTS.md", verb: "approved", who: "a teammate", when: "last week" },
+        ],
+      };
+
+      const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+      const diffLine = ([sign, text]) =>
+        `<div class="${sign === "+" ? "add" : sign === "-" ? "del" : ""}">${esc(sign + " " + text)}</div>`;
+      const changedPaths = () => S.proposal.files.map((f) => f.path);
+
+      function act(what) {
+        if (what === "approve") { S.proposal.status = "approved"; S.session.state = "proposed"; }
+        if (what === "reject") { S.proposal.status = "rejected"; S.session.state = "proposed"; }
+        if (what === "propose") S.session.state = "proposed";
+        render();
+      }
+      window.act = act;
+
+      // ==================================================================
+      // Variant A — "Cockpit": dense three-pane IDE. Tree | session | diff.
+      // Primary affordance: the live session, with the diff always visible.
+      // ==================================================================
+      const VariantA = {
+        name: "Cockpit (3-pane IDE)",
+        css: `
+          body { background: #16181d; color: #d7dae0; }
+          .a-grid { display: grid; grid-template-columns: 240px 1fr 380px; grid-template-rows: 44px 1fr; height: 100vh; }
+          .a-top { grid-column: 1/-1; display: flex; align-items: center; gap: 14px; padding: 0 14px;
+                   background: #0f1115; border-bottom: 1px solid #272b33; font-size: 13px; }
+          .a-top .ws { font-weight: 600; color: #fff; }
+          .a-top .tag { background: #272b33; border-radius: 4px; padding: 1px 7px; color: #9aa2b1; font-size: 11px; }
+          .a-pane { overflow: auto; border-right: 1px solid #272b33; }
+          .a-pane h4 { margin: 0; padding: 10px 12px; font-size: 11px; letter-spacing: .09em;
+                       text-transform: uppercase; color: #6f7787; position: sticky; top: 0; background: #16181d; }
+          .a-file { padding: 4px 12px; font: 12px/1.6 ui-monospace, Menlo, monospace; color: #a7aebc; cursor: pointer; }
+          .a-file:hover { background: #1f232b; }
+          .a-file.on { background: #263042; color: #fff; }
+          .a-file .dot { color: #ffb020; }
+          .a-chat { display: flex; flex-direction: column; }
+          .a-msgs { flex: 1; overflow: auto; padding: 16px 20px; }
+          .a-msg { margin-bottom: 14px; max-width: 720px; }
+          .a-msg .who { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #6f7787; margin-bottom: 3px; }
+          .a-msg.user .bubble { background: #223047; color: #e8eefc; }
+          .a-msg .bubble { background: #1e222a; padding: 9px 12px; border-radius: 6px; }
+          .a-exec { border: 1px solid #2c313b; border-left: 3px solid #4c8bf5; border-radius: 5px; overflow: hidden; }
+          .a-exec .cmd { background: #101318; padding: 6px 10px; color: #8fb6ff; }
+          .a-exec .out { padding: 6px 10px; color: #9fe6b5; }
+          .a-composer { border-top: 1px solid #272b33; padding: 10px 20px; display: flex; gap: 8px; background: #12141a; }
+          .a-composer input { flex: 1; background: #1e222a; border: 1px solid #2c313b; color: #fff;
+                              border-radius: 6px; padding: 9px 11px; }
+          .a-run { background: #4c8bf5; color: #fff; border: 0; border-radius: 6px; padding: 0 16px; }
+          .a-diff { background: #12141a; overflow: auto; display: flex; flex-direction: column; }
+          .a-diff .file { margin: 0 10px 10px; border: 1px solid #272b33; border-radius: 6px; overflow: hidden; }
+          .a-diff .file .h { background: #1b1f27; padding: 5px 9px; font: 11px ui-monospace, Menlo, monospace; color: #c8cedb; }
+          .a-diff pre div { padding: 1px 9px; }
+          .a-diff .del { background: #33191c; color: #ff9d9d; }
+          .a-diff .add { background: #14301f; color: #93e6ae; }
+          .a-actions { margin-top: auto; position: sticky; bottom: 0; background: #0f1115;
+                       border-top: 1px solid #272b33; padding: 10px; display: flex; gap: 8px; }
+          .a-actions button { flex: 1; border: 0; border-radius: 6px; padding: 9px; }
+          .a-ok { background: #1f9d55; color: #fff; } .a-no { background: #2c313b; color: #dfe3ea; }
+          .a-status { padding: 8px 12px; font-size: 12px; color: #ffb020; }
+        `,
+        html: () => `
+          <div class="a-grid">
+            <div class="a-top">
+              <span class="ws">${S.workspace.name}</span>
+              <span class="tag">${S.workspace.kind}</span>
+              <span class="tag">${S.workspace.role}</span>
+              <span class="tag">agent: ${S.activeAgent}</span>
+              <span class="tag">session #${S.session.id} · ${S.session.state}</span>
+              <span style="margin-left:auto" class="tag">${changedPaths().length} files changed</span>
+            </div>
+
+            <div class="a-pane">
+              <h4>Workspace tree</h4>
+              ${S.tree.map((f) => `<div class="a-file ${f.path === S.openFile ? "on" : ""}">
+                   ${f.dirty ? '<span class="dot">●</span> ' : "&nbsp;&nbsp; "}${esc(f.path)}</div>`).join("")}
+            </div>
+
+            <div class="a-pane a-chat">
+              <div class="a-msgs">
+                ${S.session.messages.map((m) => m.role === "exec"
+                  ? `<div class="a-msg"><div class="who">sandbox · exit ${m.exit}</div>
+                       <div class="a-exec"><div class="cmd">$ ${esc(m.text)}</div><div class="out">${esc(m.out)}</div></div></div>`
+                  : `<div class="a-msg ${m.role}"><div class="who">${m.role}</div>
+                       <div class="bubble">${esc(m.text)}</div></div>`).join("")}
+              </div>
+              <div class="a-composer">
+                <input placeholder="Ask ${S.activeAgent} to do something…" />
+                <button class="a-run">Send</button>
+              </div>
+            </div>
+
+            <div class="a-diff">
+              <h4 style="padding:10px 12px;margin:0;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#6f7787">
+                Session diff · ${S.proposal.status}</h4>
+              ${S.proposal.files.map((f) => `<div class="file"><div class="h">${esc(f.path)}</div>
+                   <pre>${f.hunks.map(diffLine).join("")}</pre></div>`).join("")}
+              <div class="a-actions">
+                ${S.proposal.status === "pending"
+                  ? `<button class="a-ok" onclick="act('approve')">Approve all</button>
+                     <button class="a-no" onclick="act('reject')">Reject all</button>`
+                  : `<div class="a-status">Proposal ${S.proposal.status} — nothing pending.</div>`}
+              </div>
+            </div>
+          </div>`,
+      };
+
+      // ==================================================================
+      // Variant B — "Conversation": full-bleed chat, no persistent chrome.
+      // The diff arrives inline as a review card; tree/members live behind ⌘K.
+      // ==================================================================
+      const VariantB = {
+        name: "Conversation-first",
+        css: `
+          body { background: #faf9f7; color: #1f2024; }
+          .b-wrap { max-width: 780px; margin: 0 auto; padding: 26px 20px 160px; }
+          .b-head { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+          .b-chip { background: #fff; border: 1px solid #e2ded7; border-radius: 999px;
+                    padding: 5px 13px; font-size: 12.5px; color: #55504a; }
+          .b-chip.strong { background: #1f2024; color: #fff; border-color: #1f2024; }
+          .b-kbd { margin-left: auto; color: #8b8378; font-size: 12px; }
+          .b-turn { margin-bottom: 26px; }
+          .b-turn.user p { background: #eceae5; border-radius: 14px; padding: 11px 16px;
+                           display: inline-block; max-width: 78%; margin: 0; }
+          .b-turn.user { text-align: right; }
+          .b-turn.agent p { margin: 0; font-size: 15.5px; line-height: 1.65; }
+          .b-tool { border-left: 2px solid #ddd7cd; padding: 2px 0 2px 14px; margin: 10px 0;
+                    color: #6d675f; font: 12.5px/1.6 ui-monospace, Menlo, monospace; }
+          .b-tool .ok { color: #1f9d55; }
+          .b-card { border: 1px solid #e2ded7; background: #fff; border-radius: 14px;
+                    padding: 18px 20px; box-shadow: 0 2px 10px rgba(0,0,0,.04); }
+          .b-card h3 { margin: 0 0 4px; font-size: 16px; }
+          .b-card .sub { color: #8b8378; font-size: 13px; margin-bottom: 14px; }
+          .b-fileline { display: flex; align-items: center; gap: 10px; padding: 7px 0;
+                        border-top: 1px solid #f0ede8; font: 12.5px ui-monospace, Menlo, monospace; }
+          .b-fileline .n { margin-left: auto; font-size: 11px; color: #8b8378; }
+          .b-card details pre div { padding: 1px 6px; }
+          .b-card summary { cursor: pointer; color: #8b8378; font-size: 12px; margin-top: 12px; }
+          .b-cta { display: flex; gap: 10px; margin-top: 18px; }
+          .b-cta button { border: 0; border-radius: 10px; padding: 11px 20px; font-weight: 600; }
+          .b-yes { background: #1f2024; color: #fff; flex: 1; }
+          .b-noo { background: #f2efea; color: #55504a; }
+          .b-done { color: #1f9d55; font-weight: 600; }
+          .b-bar { position: fixed; left: 0; right: 0; bottom: 0; background: linear-gradient(transparent, #faf9f7 34px);
+                   padding: 34px 20px 70px; }
+          .b-inputwrap { max-width: 780px; margin: 0 auto; display: flex; gap: 10px;
+                         background: #fff; border: 1px solid #e2ded7; border-radius: 16px; padding: 10px 12px;
+                         box-shadow: 0 4px 18px rgba(0,0,0,.06); }
+          .b-inputwrap input { flex: 1; border: 0; outline: none; font-size: 15px; }
+          .b-inputwrap button { border: 0; background: #1f2024; color: #fff; border-radius: 10px; padding: 8px 16px; }
+        `,
+        html: () => `
+          <div class="b-wrap">
+            <div class="b-head">
+              <span class="b-chip strong">${S.activeAgent}</span>
+              <span class="b-chip">${S.workspace.name} · ${S.tree.length} files loaded</span>
+              <span class="b-chip">session #${S.session.id}</span>
+              <span class="b-kbd">⌘K workspace, files, members</span>
+            </div>
+
+            ${S.session.messages.map((m) => m.role === "exec"
+              ? `<div class="b-tool">$ ${esc(m.text)}<br /><span class="ok">→ ${esc(m.out)}</span></div>`
+              : `<div class="b-turn ${m.role}"><p>${esc(m.text)}</p></div>`).join("")}
+
+            <div class="b-card">
+              <h3>${S.proposal.status === "pending" ? "Save this session?" : "Session " + S.proposal.status}</h3>
+              <div class="sub">${S.proposal.files.length} files changed · all-or-nothing · ${S.proposal.age}</div>
+              ${S.proposal.files.map((f) => `<div class="b-fileline">${esc(f.path)}
+                   <span class="n">+${f.hunks.filter((h) => h[0] === "+").length} −${f.hunks.filter((h) => h[0] === "-").length}</span></div>`).join("")}
+              <details><summary>Show full diff</summary>
+                ${S.proposal.files.map((f) => `<pre style="margin-top:8px">${f.hunks.map(diffLine).join("")}</pre>`).join("")}
+              </details>
+              <div class="b-cta">
+                ${S.proposal.status === "pending"
+                  ? `<button class="b-yes" onclick="act('approve')">Approve &amp; save to workspace</button>
+                     <button class="b-noo" onclick="act('reject')">Discard</button>`
+                  : `<span class="b-done">Workspace ${S.proposal.status === "approved" ? "updated" : "left unchanged"}.</span>`}
+              </div>
+            </div>
+          </div>
+
+          <div class="b-bar"><div class="b-inputwrap">
+            <input placeholder="Keep going…" /><button>Send</button>
+          </div></div>`,
+      };
+
+      // ==================================================================
+      // Variant C — "Wiki + review inbox": the workspace reads as a docs site.
+      // Approvals are a first-class tab, not a panel; the agent is a dock.
+      // ==================================================================
+      const VariantC = {
+        name: "Wiki + review inbox",
+        css: `
+          body { background: #fff; color: #24292f; }
+          .c-nav { display: flex; align-items: center; gap: 22px; padding: 0 24px; height: 52px;
+                   border-bottom: 1px solid #e6e8eb; }
+          .c-nav .brand { font-weight: 700; }
+          .c-nav a { color: #57606a; text-decoration: none; padding: 16px 0; font-size: 14px; border-bottom: 2px solid transparent; }
+          .c-nav a.on { color: #24292f; font-weight: 600; border-bottom-color: #fd8c73; }
+          .c-nav .badge { background: #fd8c73; color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 7px; margin-left: 5px; }
+          .c-nav .me { margin-left: auto; color: #57606a; font-size: 13px; }
+          .c-nav .chatbtn { border: 0; background: #24292f; color: #fff; border-radius: 7px; padding: 6px 13px; }
+          /* Columns are computed per state (file open? log open? chat wide?) — see html(). */
+          .c-body { display: grid; grid-template-rows: minmax(0, 1fr) 26px; height: calc(100vh - 52px); }
+          .c-side { border-right: 1px solid #e6e8eb; padding: 18px 0; background: #f6f8fa; overflow: auto; }
+          /* Middle column: editor tabs + document + output panel, VS Code style. */
+          .c-mid { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+          .c-mid.hidden { display: none; }
+          .c-tabs { display: flex; background: #f6f8fa; border-bottom: 1px solid #e6e8eb; }
+          .c-tab { display: flex; align-items: center; gap: 9px; padding: 8px 12px 8px 16px; background: #fff;
+                   border-right: 1px solid #e6e8eb; font: 12.5px ui-monospace, Menlo, monospace; }
+          .c-tab .x { border: 0; background: none; color: #656d76; border-radius: 4px; padding: 0 4px; line-height: 1; }
+          .c-tab .x:hover { background: #e6e8eb; color: #24292f; }
+          .c-tab .mod { color: #bc4c00; font-size: 15px; line-height: 0; }
+          .c-out { border-top: 1px solid #e6e8eb; background: #f6f8fa; display: flex; flex-direction: column;
+                   flex: 0 1 auto; max-height: 46%; min-height: 0; }
+          .c-out.only { flex: 1 1 auto; max-height: none; border-top: 0; } /* log is the whole pane */
+          .c-out .oh { display: flex; align-items: center; gap: 10px; padding: 6px 14px;
+                       border-bottom: 1px solid #e6e8eb; font-size: 11px; text-transform: uppercase;
+                       letter-spacing: .07em; color: #656d76; }
+          .c-out .oh .fail { color: #cf222e; text-transform: none; letter-spacing: 0; }
+          .c-out .oh button { margin-left: auto; border: 0; background: none; color: #656d76; font-size: 15px; line-height: 1; }
+          .c-out .ol { overflow: auto; padding: 8px 0; font: 12px/1.55 ui-monospace, Menlo, monospace; }
+          .c-run { padding: 5px 14px; border-left: 3px solid transparent; }
+          .c-run.bad { border-left-color: #cf222e; background: #fff5f5; }
+          .c-run .cl { color: #24292f; }
+          .c-run .cl .t { color: #8c959f; margin-right: 8px; }
+          .c-run .cl .code { float: right; color: #656d76; }
+          .c-run .cl .code.bad { color: #cf222e; }
+          .c-run .so { color: #57606a; white-space: pre-wrap; padding-left: 14px; }
+          .c-run .se { color: #cf222e; white-space: pre-wrap; padding-left: 14px; }
+          .c-status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px;
+                      background: #24292f; color: #d0d7de; font-size: 11.5px; }
+          .c-status button { border: 0; background: none; color: #d0d7de; font-size: 11.5px; padding: 0; }
+          .c-status button:hover { color: #fff; text-decoration: underline; }
+          .c-status .r { margin-left: auto; }
+          .c-side .grp { font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+                         color: #656d76; padding: 10px 20px 6px; }
+          .c-side .it { padding: 5px 20px; font-size: 13.5px; color: #24292f; cursor: pointer; }
+          .c-side .it:hover { background: #eaeef2; }
+          .c-side .it.on { background: #ddf4ff; font-weight: 600; }
+          .c-side .it .pill { float: right; font-size: 10px; background: #fd8c73; color: #fff; border-radius: 999px; padding: 0 6px; }
+          .c-main { padding: 30px 44px 60px; overflow: auto; flex: 1 1 auto; min-height: 0; }
+          .c-crumbs { color: #656d76; font-size: 12.5px; margin-bottom: 6px; }
+          .c-main h1 { margin: 0 0 4px; font-size: 26px; }
+          .c-meta { color: #656d76; font-size: 13px; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid #e6e8eb; }
+          .c-doc { white-space: pre-wrap; font-size: 15px; line-height: 1.75; }
+          .c-review { border: 1px solid #e6e8eb; border-radius: 8px; margin-bottom: 16px; }
+          .c-review .h { background: #f6f8fa; padding: 12px 16px; border-bottom: 1px solid #e6e8eb;
+                         display: flex; align-items: center; gap: 10px; }
+          .c-review .h b { font-size: 14px; }
+          .c-review .h .who { color: #656d76; font-size: 12.5px; }
+          .c-review .h .btns { margin-left: auto; display: flex; gap: 8px; }
+          .c-review .h button { border: 1px solid #d0d7de; border-radius: 6px; padding: 5px 13px; background: #f6f8fa; }
+          .c-review .h .ok { background: #1f883d; color: #fff; border-color: #1f883d; }
+          .c-review .f { padding: 10px 16px; border-top: 1px solid #f0f2f4; }
+          .c-review .f .p { font: 12px ui-monospace, Menlo, monospace; color: #0969da; margin-bottom: 5px; }
+          .c-review pre div { padding: 1px 6px; }
+          .c-empty { color: #656d76; padding: 40px 0; }
+          .c-hist { border-top: 1px solid #e6e8eb; padding: 11px 0; font-size: 13.5px; color: #57606a; }
+          /* Chat is a full-height column, not a dock: the agent is the main verb here. */
+          .c-chat { border-left: 1px solid #e6e8eb; display: flex; flex-direction: column;
+                    background: #fbfcfd; min-width: 0; }
+          .c-chat.hidden { display: none; }
+          .c-chat .ch { display: flex; align-items: center; gap: 9px; padding: 12px 18px;
+                        border-bottom: 1px solid #e6e8eb; background: #fff; }
+          .c-chat .ch b { font-size: 14px; }
+          .c-chat .ch .live { font-size: 11px; color: #1f883d; background: #dafbe1;
+                              border-radius: 999px; padding: 2px 9px; }
+          .c-chat .ch .expand { margin-left: auto; border: 1px solid #d0d7de; background: #f6f8fa;
+                                border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #57606a; }
+          .c-turns { flex: 1; overflow: auto; padding: 22px 26px; }
+          .c-turn { margin-bottom: 20px; }
+          .c-turn.user { text-align: right; }
+          .c-turn.user p { display: inline-block; text-align: left; background: #ddf4ff; margin: 0;
+                           padding: 10px 15px; border-radius: 14px; max-width: 85%; font-size: 14.5px; }
+          .c-turn.agent p { margin: 0; font-size: 14.5px; line-height: 1.7; }
+          .c-tool { border-left: 2px solid #d0d7de; padding: 3px 0 3px 13px; margin: 12px 0;
+                    font: 12.5px/1.6 ui-monospace, Menlo, monospace; color: #57606a; }
+          .c-tool .ok { color: #1f883d; }
+          .c-inline { border: 1px solid #d0d7de; border-radius: 10px; background: #fff; padding: 15px 17px;
+                      margin-top: 6px; }
+          .c-inline b { font-size: 14px; }
+          .c-inline .sub { color: #656d76; font-size: 12.5px; margin: 3px 0 12px; }
+          .c-inline .fl { display: flex; padding: 5px 0; border-top: 1px solid #f0f2f4;
+                          font: 12px ui-monospace, Menlo, monospace; }
+          .c-inline .fl .n { margin-left: auto; color: #656d76; }
+          .c-inline .cta { display: flex; gap: 8px; margin-top: 14px; }
+          .c-inline .cta button { border: 1px solid #d0d7de; border-radius: 7px; padding: 8px 15px;
+                                  background: #f6f8fa; font-weight: 600; }
+          .c-inline .cta .ok { background: #1f883d; color: #fff; border-color: #1f883d; flex: 1; }
+          .c-inline .cta a { color: #0969da; font-size: 12.5px; align-self: center; }
+          .c-inline .done { color: #1f883d; font-weight: 600; font-size: 13px; }
+          .c-ci { border-top: 1px solid #e6e8eb; background: #fff; padding: 12px 18px; display: flex; gap: 9px; }
+          .c-ci input { flex: 1; border: 1px solid #d0d7de; border-radius: 9px; padding: 10px 13px;
+                        outline: none; font-size: 14.5px; }
+          .c-ci button { border: 0; background: #24292f; color: #fff; border-radius: 9px; padding: 0 18px; }
+        `,
+        html: () => {
+          const tab = S.cTab || "library";
+          const pending = S.proposal.status === "pending" ? 1 : 0;
+          // Chat width: normal → wide (chat dominates) → docs (chat hidden).
+          const mode = S.cChat || "normal";
+          const next = { normal: "wide", wide: "docs", docs: "normal" }[mode];
+          const label = { normal: "Widen chat ⤢", wide: "Hide chat ⤡", docs: "" }[mode];
+          // VS Code style: the file tab and the output panel each close independently.
+          // Close both and the middle column disappears — just nav + chat.
+          const fileOpen = S.cFile !== false;
+          const logOpen = S.cLog !== false;
+          const docPane = tab !== "library" || fileOpen; // non-library tabs are always a document
+          const midOpen = docPane || logOpen;
+          const chatOpen = mode !== "docs" || !midOpen;  // never leave the screen empty
+          const failed = S.executions.filter((e) => e.exit !== 0).length;
+          const cols = !midOpen
+            ? "230px 0 minmax(0, 1fr)"
+            : !chatOpen ? "230px minmax(0, 1fr) 0"
+            : mode === "wide" ? "230px minmax(0, 0.6fr) minmax(0, 2fr)"
+            : "230px minmax(0, 1fr) minmax(0, 480px)";
+          const nav = (k, label) =>
+            `<a href="#" class="${tab === k ? "on" : ""}" onclick="S.cTab='${k}';render();return false">${label}${
+              k === "review" && pending ? `<span class="badge">${pending}</span>` : ""}</a>`;
+
+          const library = `
+            <div class="c-crumbs">${S.workspace.name} / ${S.openFile.split("/").slice(0, -1).join(" / ")}</div>
+            <h1>${esc(S.openFile.split("/").pop())}</h1>
+            <div class="c-meta">Instruction file · loaded into every ${S.activeAgent} session ·
+              last approved yesterday by you${S.proposal.files.some((f) => f.path === S.openFile)
+                ? ' · <b style="color:#bc4c00">pending change in review</b>' : ""}</div>
+            <div class="c-doc">${esc(S.fileBody)}</div>`;
+
+          const review = S.proposal.status !== "pending"
+            ? `<h1>Review inbox</h1><div class="c-empty">Nothing pending. Last proposal was ${S.proposal.status}.</div>`
+            : `<h1>Review inbox</h1>
+               <div class="c-meta">Proposals change the workspace only once an owner approves them.</div>
+               <div class="c-review">
+                 <div class="h"><b>Session #${S.session.id} — forecast + stage weights</b>
+                   <span class="who">${S.proposal.author} · ${S.proposal.age} · ${S.proposal.files.length} files</span>
+                   <span class="btns"><button class="ok" onclick="act('approve')">Approve</button>
+                     <button onclick="act('reject')">Reject</button></span></div>
+                 ${S.proposal.files.map((f) => `<div class="f"><div class="p">${esc(f.path)}</div>
+                      <pre>${f.hunks.map(diffLine).join("")}</pre></div>`).join("")}
+               </div>`;
+
+          const history = `<h1>History</h1>
+            <div class="c-meta">Every approved or rejected change to this workspace.</div>
+            ${S.history.map((h) => `<div class="c-hist"><b>#${h.id}</b> ${h.verb} — ${esc(h.path)} · ${h.who} · ${h.when}</div>`).join("")}`;
+
+          const members = `<h1>Members</h1>
+            <div class="c-meta">${S.workspace.members} members · owners approve, editors propose and run, viewers read.</div>
+            ${["you — owner", "a teammate — owner", "3 teammates — editor", "a teammate — viewer"]
+              .map((m) => `<div class="c-hist">${m}</div>`).join("")}`;
+
+          const main = { library, review, history, members }[tab];
+
+          const tabBar = tab === "library" && fileOpen
+            ? `<div class="c-tabs"><div class="c-tab">
+                 ${S.tree.find((f) => f.path === S.openFile)?.dirty ? '<span class="mod">●</span>' : ""}
+                 ${esc(S.openFile.split("/").pop())}
+                 <button class="x" title="Close file" onclick="S.cFile=false;render()">✕</button>
+               </div></div>`
+            : "";
+
+          const outputPanel = `
+            <div class="c-out ${docPane ? "" : "only"}">
+              <div class="oh">Sandbox output · session #${S.session.id} · ${S.executions.length} runs
+                ${failed ? `<span class="fail">${failed} failed</span>` : ""}
+                <button title="Close panel" onclick="S.cLog=false;render()">✕</button>
+              </div>
+              <div class="ol">
+                ${S.executions.map((e) => `<div class="c-run ${e.exit === 0 ? "" : "bad"}">
+                     <div class="cl"><span class="t">${e.at}</span>$ ${esc(e.cmd)}
+                       <span class="code ${e.exit === 0 ? "" : "bad"}">exit ${e.exit} · ${e.ms}ms</span></div>
+                     ${e.out ? `<div class="so">${esc(e.out)}</div>` : ""}
+                     ${e.err ? `<div class="se">${esc(e.err)}</div>` : ""}
+                   </div>`).join("")}
+              </div>
+            </div>`;
+
+          return `
+            <div class="c-nav">
+              <span class="brand">${S.workspace.name}</span>
+              ${nav("library", "Library")}${nav("review", "Review")}${nav("history", "History")}${nav("members", "Members")}
+              <span class="me">${S.workspace.role} · ${S.workspace.kind}</span>
+              ${mode === "docs"
+                ? `<button class="chatbtn" onclick="S.cChat='normal';render()">Open chat</button>` : ""}
+            </div>
+            <div class="c-body" style="grid-template-columns: ${cols}">
+              <div class="c-side">
+                <div class="grp">Agents</div>
+                ${S.agents.map((a) => `<div class="it ${a.name === S.activeAgent ? "on" : ""}">${a.name}
+                     <span style="color:#656d76;font-size:11px">${a.files}</span></div>`).join("")}
+                <div class="grp">Files</div>
+                ${S.tree.map((f) => `<div class="it ${f.path === S.openFile && fileOpen ? "on" : ""}"
+                     onclick="S.openFile='${f.path}';S.cFile=true;S.cTab='library';render()">${esc(f.path)}
+                     ${f.dirty && pending ? '<span class="pill">review</span>' : ""}</div>`).join("")}
+              </div>
+              <div class="c-mid ${midOpen ? "" : "hidden"}">
+                ${tabBar}
+                ${docPane ? `<div class="c-main">${main}</div>` : ""}
+                ${logOpen ? outputPanel : ""}
+              </div>
+              <div class="c-chat ${chatOpen ? "" : "hidden"}">
+                <div class="ch">
+                  <b>${S.activeAgent}</b>
+                  <span style="color:#656d76;font-size:12.5px">session #${S.session.id}</span>
+                  <span class="live">${S.session.state}</span>
+                  <button class="expand" onclick="S.cChat='${next}';render()">${label}</button>
+                </div>
+                <div class="c-turns">
+                  ${S.session.messages.map((m) => m.role === "exec"
+                    ? `<div class="c-tool">$ ${esc(m.text)}<br /><span class="ok">→ ${esc(m.out)}</span></div>`
+                    : `<div class="c-turn ${m.role}"><p>${esc(m.text)}</p></div>`).join("")}
+                  <div class="c-inline">
+                    <b>${S.proposal.status === "pending" ? "Save this session?" : "Session " + S.proposal.status}</b>
+                    <div class="sub">${S.proposal.files.length} files changed · all-or-nothing</div>
+                    ${S.proposal.files.map((f) => `<div class="fl">${esc(f.path)}
+                         <span class="n">+${f.hunks.filter((h) => h[0] === "+").length} −${f.hunks.filter((h) => h[0] === "-").length}</span></div>`).join("")}
+                    <div class="cta">
+                      ${S.proposal.status === "pending"
+                        ? `<button class="ok" onclick="act('approve')">Approve &amp; save</button>
+                           <button onclick="act('reject')">Discard</button>
+                           <a href="#" onclick="S.cTab='review';render();return false">Full diff in Review →</a>`
+                        : `<span class="done">Workspace ${S.proposal.status === "approved" ? "updated" : "left unchanged"}.</span>`}
+                    </div>
+                  </div>
+                </div>
+                <div class="c-ci">
+                  <input placeholder="Message ${S.activeAgent}…" /><button>Send</button>
+                </div>
+              </div>
+              <div class="c-status">
+                <button onclick="S.cFile=${!fileOpen};S.cTab='library';render()">
+                  ${fileOpen ? "✕ Close file" : "▤ " + S.openFile.split("/").pop()}</button>
+                <button onclick="S.cLog=${!logOpen};render()">
+                  ${logOpen ? "✕ Close output" : "▶ Output"} (${S.executions.length}${failed ? ", " + failed + " failed" : ""})</button>
+                <button onclick="S.cChat='${chatOpen ? "docs" : "normal"}';render()">
+                  ${chatOpen ? "✕ Close chat" : "▶ Chat"}</button>
+                <span class="r">${S.activeAgent} · session #${S.session.id} · ${S.session.state}
+                  · ${S.proposal.files.length} changed · sandbox ready</span>
+              </div>
+            </div>`;
+        },
+      };
+
+      // ------------------------------------------------------------------
+      // Switcher wiring
+      // ------------------------------------------------------------------
+      const VARIANTS = { A: VariantA, B: VariantB, C: VariantC };
+      const KEYS = Object.keys(VARIANTS);
+      let current = (new URLSearchParams(location.search).get("variant") || "A").toUpperCase();
+      if (!VARIANTS[current]) current = "A";
+
+      let styleEl = document.createElement("style");
+      document.head.appendChild(styleEl);
+
+      function render() {
+        const v = VARIANTS[current];
+        styleEl.textContent = v.css;
+        document.getElementById("root").innerHTML = v.html();
+        document.getElementById("variant-label").textContent = `${current} — ${v.name}`;
+        document.getElementById("state-dump").textContent = JSON.stringify(
+          {
+            variant: current,
+            workspace: S.workspace,
+            activeAgent: S.activeAgent,
+            session: { id: S.session.id, state: S.session.state, turns: S.session.messages.length },
+            proposal: { id: S.proposal.id, status: S.proposal.status, files: changedPaths() },
+            tab: S.cTab || "(A/B: n/a)",
+            chatWidth: S.cChat || "normal",
+            fileOpen: S.cFile !== false,
+            outputOpen: S.cLog !== false,
+            executions: S.executions.map((e) => `${e.cmd} → exit ${e.exit}`),
+          },
+          null, 2
+        );
+      }
+
+      function go(delta) {
+        current = KEYS[(KEYS.indexOf(current) + delta + KEYS.length) % KEYS.length];
+        const url = new URL(location.href);
+        url.searchParams.set("variant", current);
+        history.replaceState({}, "", url);
+        render();
+      }
+
+      document.getElementById("prev").onclick = () => go(-1);
+      document.getElementById("next").onclick = () => go(1);
+      document.addEventListener("keydown", (e) => {
+        if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+        if (e.key === "ArrowLeft") go(-1);
+        if (e.key === "ArrowRight") go(1);
+      });
+
+      render();
+    </script>
+  </body>
+</html>
