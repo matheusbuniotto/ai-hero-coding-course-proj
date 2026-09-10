@@ -16,10 +16,11 @@ class AgentSessionService:
         self.workspaces = workspaces
         self.harness = harness
 
-    def start_session(self, workspace: Workspace, user: User) -> AgentSession:
+    def start_session(self, workspace: Workspace, user: User, agent_name: str) -> AgentSession:
+        """Start a session scoped to one agent subfolder (`agents/<agent_name>/...`)."""
         assert workspace.id is not None
         assert user.id is not None
-        session = AgentSession(workspace_id=workspace.id, user_id=user.id)
+        session = AgentSession(workspace_id=workspace.id, user_id=user.id, agent_name=agent_name)
         self.db.add(session)
         self.db.commit()
         self.db.refresh(session)
@@ -46,23 +47,24 @@ class AgentSessionService:
         history = [
             ChatTurn(role=m.role.value, content=m.content) for m in self.list_messages(session)
         ]
-        instructions = self._instructions(workspace)
+        instructions = self._instructions(workspace, session.agent_name)
 
         self._store(session, AgentMessageRole.user, message)
         reply = self.harness.reply(instructions, history, message)
         return self._store(session, AgentMessageRole.assistant, reply)
 
-    def _instructions(self, workspace: Workspace) -> str:
-        files = self.workspaces.list_files(workspace)
+    def _instructions(self, workspace: Workspace, agent_name: str) -> str:
+        files = self.workspaces.list_agent_files(workspace, agent_name)
         if not files:
             return (
-                "You are a read-only assistant for a workspace that has no instruction "
-                "files yet. Say so if asked about workspace content."
+                f"You are the '{agent_name}' read-only assistant for this workspace, which "
+                "has no instruction files yet. Say so if asked about workspace content."
             )
         sections = "\n\n---\n\n".join(f"# {f.path}\n\n{f.content}" for f in files)
         return (
-            "You are a read-only assistant for this workspace. Ground every answer in "
-            "the instruction files below. You cannot write files or run code.\n\n" + sections
+            f"You are the '{agent_name}' read-only assistant for this workspace. Ground "
+            "every answer in the instruction files below. You cannot write files or run "
+            "code.\n\n" + sections
         )
 
     def _store(self, session: AgentSession, role: AgentMessageRole, content: str) -> AgentMessage:

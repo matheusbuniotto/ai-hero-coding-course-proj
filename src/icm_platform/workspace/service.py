@@ -21,6 +21,11 @@ def _org_of(email: str) -> str:
     return email.rsplit("@", 1)[-1].lower()
 
 
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE wildcards so a path prefix can't match beyond itself."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class WorkspaceService:
     def __init__(self, db: DBSession):
         self.db = db
@@ -120,6 +125,19 @@ class WorkspaceService:
         """The workspace's canonical (approved) files, sorted by path."""
         return self._files(workspace, path_prefix=None)
 
+    def list_agents(self, workspace: Workspace) -> list[str]:
+        """Names of the workspace's agent subfolders (`agents/<name>/...`), sorted."""
+        names = {
+            f.path.split("/", 2)[1]
+            for f in self._files(workspace, path_prefix="agents")
+            if f.path.count("/") >= 2
+        }
+        return sorted(names)
+
+    def list_agent_files(self, workspace: Workspace, agent_name: str) -> list[WorkspaceFile]:
+        """The approved files scoped to a single agent subfolder, sorted by path."""
+        return self._files(workspace, path_prefix=f"agents/{agent_name}")
+
     def fork_workspace(
         self, user: User, source_workspace_id: int, name: str, path_prefix: str | None = None
     ) -> Workspace:
@@ -143,8 +161,8 @@ class WorkspaceService:
     def _files(self, workspace: Workspace, path_prefix: str | None) -> list[WorkspaceFile]:
         query = select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id)
         if path_prefix is not None:
-            prefix = path_prefix.rstrip("/") + "/"
-            query = query.where(col(WorkspaceFile.path).like(f"{prefix}%"))
+            prefix = _escape_like(path_prefix.rstrip("/")) + "/"
+            query = query.where(col(WorkspaceFile.path).like(f"{prefix}%", escape="\\"))
         query = query.order_by(WorkspaceFile.path)
         return list(self.db.exec(query))
 

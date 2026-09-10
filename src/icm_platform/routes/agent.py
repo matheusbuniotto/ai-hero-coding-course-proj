@@ -2,11 +2,15 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from icm_platform.agent.service import AgentSessionError
-from icm_platform.deps import AgentSessionServiceDep, WorkspaceAccessDep
+from icm_platform.deps import AgentSessionServiceDep, WorkspaceAccessDep, WorkspaceServiceDep
 from icm_platform.models import AgentMessage, AgentSession
 from icm_platform.workspace.permissions import Permission
 
 router = APIRouter(prefix="/workspace/agent", tags=["agent"])
+
+
+class StartSessionRequest(BaseModel):
+    agent_name: str
 
 
 class SendMessageRequest(BaseModel):
@@ -17,6 +21,7 @@ def _session_json(session: AgentSession) -> dict:
     return {
         "id": session.id,
         "workspace_id": session.workspace_id,
+        "agent_name": session.agent_name,
         "created_at": session.created_at.isoformat(),
     }
 
@@ -39,10 +44,18 @@ def _get_session(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.post("/sessions")
-def start_session(access: WorkspaceAccessDep, agent: AgentSessionServiceDep) -> dict:
+@router.get("/agents")
+def list_agents(access: WorkspaceAccessDep, workspaces: WorkspaceServiceDep) -> list[str]:
     access.require(Permission.read)
-    session = agent.start_session(access.workspace, access.user)
+    return workspaces.list_agents(access.workspace)
+
+
+@router.post("/sessions")
+def start_session(
+    body: StartSessionRequest, access: WorkspaceAccessDep, agent: AgentSessionServiceDep
+) -> dict:
+    access.require(Permission.read)
+    session = agent.start_session(access.workspace, access.user, body.agent_name)
     return _session_json(session)
 
 

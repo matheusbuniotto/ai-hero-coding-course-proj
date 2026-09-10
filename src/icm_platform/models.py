@@ -102,6 +102,7 @@ class AgentSession(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     workspace_id: int = Field(foreign_key="workspace.id", index=True)
     user_id: int = Field(foreign_key="user.id", index=True)
+    agent_name: str
     created_at: datetime = Field(default_factory=utcnow)
 
 
