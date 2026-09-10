@@ -2,6 +2,7 @@ from sqlmodel import Session as DBSession
 from sqlmodel import col, select
 
 from icm_platform.agent.execution import CodeExecutionService
+from icm_platform.agent.lifecycle import AgentSessionError, require_open
 from icm_platform.agent.ports import AgentHarnessPort, ChatTurn, CodeRunner
 from icm_platform.models import (
     AgentMessage,
@@ -13,10 +14,6 @@ from icm_platform.models import (
 )
 from icm_platform.workspace.permissions import Permission
 from icm_platform.workspace.service import WorkspaceAccessError, WorkspaceService
-
-
-class AgentSessionError(Exception):
-    """No such session, or it doesn't belong to this workspace."""
 
 
 class AgentSessionService:
@@ -62,6 +59,7 @@ class AgentSessionService:
         self, workspace: Workspace, session: AgentSession, message: str
     ) -> AgentMessage:
         """Ask the agent for a reply, grounded in the workspace's instruction files."""
+        require_open(session)
         history = [
             ChatTurn(role=m.role.value, content=m.content) for m in self.list_messages(session)
         ]

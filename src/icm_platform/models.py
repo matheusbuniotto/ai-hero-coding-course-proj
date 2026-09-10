@@ -82,12 +82,16 @@ class FileProposal(SQLModel, table=True):
 
     A new pending proposal for the same (workspace, path) supersedes any
     existing pending one for that path — there is no branching/merge.
+
+    `session_id` groups the proposals an agent session submitted together, so
+    they can be shown as one consolidated diff and resolved in one decision.
     """
 
     id: int | None = Field(default=None, primary_key=True)
     workspace_id: int = Field(foreign_key="workspace.id", index=True)
     path: str = Field(index=True)
     proposed_by_user_id: int = Field(foreign_key="user.id")
+    session_id: int | None = Field(default=None, foreign_key="agentsession.id", index=True)
     base_content: str | None
     proposed_content: str
     status: ProposalStatus = Field(default=ProposalStatus.pending)
@@ -101,6 +105,9 @@ class AgentSession(SQLModel, table=True):
 
     Anything the session does to files happens in its own working copy
     (`SessionFile`), never in the workspace's canonical tree.
+
+    Ending the session submits that working copy as a proposal; an ended
+    session takes no further messages or executions.
     """
 
     id: int | None = Field(default=None, primary_key=True)
@@ -108,6 +115,7 @@ class AgentSession(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     agent_name: str
     created_at: datetime = Field(default_factory=utcnow)
+    ended_at: datetime | None = None
 
 
 class AgentMessageRole(str, Enum):
@@ -129,6 +137,10 @@ class SessionFile(SQLModel, table=True):
     Seeded from the workspace's canonical files and then changed freely by
     code execution. Nothing here reaches the canonical tree without going
     through the propose/approve flow.
+
+    `base_content` is what the file held when the working copy was taken —
+    None for a file the session created — so the session's own changes can be
+    told apart from what the file started as.
     """
 
     __table_args__ = (UniqueConstraint("session_id", "path"),)
@@ -137,7 +149,13 @@ class SessionFile(SQLModel, table=True):
     session_id: int = Field(foreign_key="agentsession.id", index=True)
     path: str = Field(index=True)
     content: str
+    base_content: str | None = None
     updated_at: datetime = Field(default_factory=utcnow)
+
+    @property
+    def changed(self) -> bool:
+        """Whether the session changed this file from what it started as."""
+        return self.content != self.base_content
 
 
 class CodeExecutionStatus(str, Enum):

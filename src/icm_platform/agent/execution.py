@@ -1,6 +1,7 @@
 from sqlmodel import Session as DBSession
 from sqlmodel import col, select
 
+from icm_platform.agent.lifecycle import require_open
 from icm_platform.models import (
     AgentSession,
     CodeExecution,
@@ -34,11 +35,25 @@ class CodeExecutionService:
         """
         assert session.id is not None
         for file in self.workspaces.list_agent_files(workspace, session.agent_name):
-            self.db.add(SessionFile(session_id=session.id, path=file.path, content=file.content))
+            self.db.add(
+                SessionFile(
+                    session_id=session.id,
+                    path=file.path,
+                    content=file.content,
+                    base_content=file.content,
+                )
+            )
+        self.db.commit()
+
+    def discard_working_copy(self, session: AgentSession) -> None:
+        """Throw the session's working copy away, once its changes are resolved."""
+        for file in self._session_files(session):
+            self.db.delete(file)
         self.db.commit()
 
     def execute(self, session: AgentSession, command: str) -> CodeExecution:
         """Run `command` in the sandbox, recording the outcome even when it fails."""
+        require_open(session)
         assert session.id is not None
         files = [SandboxFile(path=f.path, content=f.content) for f in self._session_files(session)]
         try:

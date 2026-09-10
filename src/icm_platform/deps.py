@@ -13,6 +13,7 @@ from icm_platform.auth.service import AuthService
 from icm_platform.db import DBSessionDep
 from icm_platform.models import User, Workspace, WorkspaceMember, WorkspaceRole
 from icm_platform.proposals.service import ProposalService
+from icm_platform.proposals.session import SessionProposalService
 from icm_platform.sandbox.ports import SandboxPort, UnavailableSandbox
 from icm_platform.workspace.permissions import Permission
 from icm_platform.workspace.service import WorkspaceAccessError, WorkspaceService
@@ -66,6 +67,14 @@ def get_agent_session_service(
     return AgentSessionService(db, workspace_service, harness, executions)
 
 
+def get_session_proposal_service(
+    db: DBSessionDep,
+    proposals: Annotated[ProposalService, Depends(get_proposal_service)],
+    executions: Annotated[CodeExecutionService, Depends(get_code_execution_service)],
+) -> SessionProposalService:
+    return SessionProposalService(db, proposals, executions)
+
+
 def get_current_user(
     request: Request, auth_service: Annotated[AuthService, Depends(get_auth_service)]
 ) -> User | None:
@@ -86,6 +95,7 @@ WorkspaceServiceDep = Annotated[WorkspaceService, Depends(get_workspace_service)
 ProposalServiceDep = Annotated[ProposalService, Depends(get_proposal_service)]
 AgentSessionServiceDep = Annotated[AgentSessionService, Depends(get_agent_session_service)]
 CodeExecutionServiceDep = Annotated[CodeExecutionService, Depends(get_code_execution_service)]
+SessionProposalServiceDep = Annotated[SessionProposalService, Depends(get_session_proposal_service)]
 
 
 @dataclass(frozen=True)

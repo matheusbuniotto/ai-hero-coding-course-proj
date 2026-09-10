@@ -1,16 +1,27 @@
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from icm_platform.agent.service import AgentSessionError
+from icm_platform.agent.lifecycle import AgentSessionError
 from icm_platform.deps import (
     AgentSessionServiceDep,
     CodeExecutionServiceDep,
+    SessionProposalServiceDep,
+    WorkspaceAccess,
     WorkspaceAccessDep,
     WorkspaceServiceDep,
 )
-from icm_platform.models import AgentMessage, AgentSession, CodeExecution
+from icm_platform.models import (
+    AgentMessage,
+    AgentSession,
+    CodeExecution,
+    FileProposal,
+    User,
+    Workspace,
+)
+from icm_platform.proposals.session import SessionProposalError
 from icm_platform.workspace.permissions import Permission
 
 router = APIRouter(prefix="/workspace/agent", tags=["agent"])
@@ -59,6 +70,29 @@ def _execution_json(execution: CodeExecution) -> dict:
     }
 
 
+def _session_proposal_json(session: AgentSession, proposals: list[FileProposal]) -> dict:
+    """One session's consolidated diff: every file it changed, in one payload."""
+    return {
+        "session_id": session.id,
+        "ended_at": session.ended_at.isoformat() if session.ended_at else None,
+        "changes": [
+            {
+                "proposal_id": p.id,
+                "path": p.path,
+                "status": p.status,
+                "base_content": p.base_content,
+                "proposed_content": p.proposed_content,
+            }
+            for p in proposals
+        ],
+    }
+
+
+def _conflict(exc: Exception) -> HTTPException:
+    """The session is in the wrong state for this — already ended, or not yet ended."""
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
 def get_session(
     session_id: int, access: WorkspaceAccessDep, agent: AgentSessionServiceDep
 ) -> AgentSession:
@@ -95,7 +129,10 @@ def send_message(
     agent: AgentSessionServiceDep,
 ) -> dict:
     access.require(Permission.read)
-    reply = agent.send_message(access.workspace, session, body.message)
+    try:
+        reply = agent.send_message(access.workspace, session, body.message)
+    except AgentSessionError as exc:
+        raise _conflict(exc) from exc
     return _message_json(reply)
 
 
@@ -116,7 +153,10 @@ def execute_code(
 ) -> dict:
     """Run a command in the session's sandbox. A failed run is a 200 with `status`."""
     access.require(Permission.run)
-    return _execution_json(executions.execute(session, body.command))
+    try:
+        return _execution_json(executions.execute(session, body.command))
+    except AgentSessionError as exc:
+        raise _conflict(exc) from exc
 
 
 @router.get("/sessions/{session_id}/executions")
@@ -135,3 +175,56 @@ def list_working_copy(
     access.require(Permission.read)
     files = executions.list_working_copy(session)
     return [{"path": f.path, "content": f.content} for f in files]
+
+
+@router.post("/sessions/{session_id}/proposal")
+def submit_session_proposal(
+    session: SessionDep, access: WorkspaceAccessDep, session_proposals: SessionProposalServiceDep
+) -> dict:
+    """End the session, submitting everything it changed as one consolidated diff."""
+    access.require(Permission.propose)
+    try:
+        submitted = session_proposals.submit(access.workspace, access.user, session)
+    except SessionProposalError as exc:
+        raise _conflict(exc) from exc
+    return _session_proposal_json(session, submitted)
+
+
+@router.get("/sessions/{session_id}/proposal")
+def get_session_proposal(
+    session: SessionDep, access: WorkspaceAccessDep, session_proposals: SessionProposalServiceDep
+) -> dict:
+    """The session's submitted diff, as far as it is still awaiting a decision."""
+    access.require(Permission.read)
+    return _session_proposal_json(session, session_proposals.pending(access.workspace, session))
+
+
+@router.post("/sessions/{session_id}/proposal/approve")
+def approve_session_proposal(
+    session: SessionDep, access: WorkspaceAccessDep, session_proposals: SessionProposalServiceDep
+) -> dict:
+    """Apply the session's whole diff — the explicit confirm, even in a solo workspace."""
+    access.require(Permission.approve)
+    return _resolve_session(session_proposals.approve, session, access)
+
+
+@router.post("/sessions/{session_id}/proposal/reject")
+def reject_session_proposal(
+    session: SessionDep, access: WorkspaceAccessDep, session_proposals: SessionProposalServiceDep
+) -> dict:
+    """Drop the session's whole diff and its working copy, leaving the tree unchanged."""
+    access.require(Permission.approve)
+    return _resolve_session(session_proposals.reject, session, access)
+
+
+SessionResolver = Callable[[Workspace, User, AgentSession], list[FileProposal]]
+
+
+def _resolve_session(
+    resolve: SessionResolver, session: AgentSession, access: WorkspaceAccess
+) -> dict:
+    try:
+        resolved = resolve(access.workspace, access.user, session)
+    except SessionProposalError as exc:
+        raise _conflict(exc) from exc
+    return _session_proposal_json(session, resolved)

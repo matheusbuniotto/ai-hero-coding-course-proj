@@ -2,7 +2,8 @@ import pytest
 from sqlmodel import Session as DBSession
 
 from icm_platform.agent.execution import CodeExecutionService
-from icm_platform.agent.service import AgentSessionError, AgentSessionService
+from icm_platform.agent.lifecycle import AgentSessionError
+from icm_platform.agent.service import AgentSessionService
 from icm_platform.models import AgentMessageRole, User, WorkspaceRole
 from icm_platform.proposals.service import ProposalService
 from icm_platform.sandbox.ports import SandboxResult
