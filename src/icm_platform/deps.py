@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated
@@ -23,6 +24,20 @@ SESSION_COOKIE = "session_token"
 
 def get_email_port() -> EmailPort:
     return ConsoleEmailPort()
+
+
+def dev_auth_enabled() -> bool:
+    """Whether the magic-link-skipping dev sign-in is exposed.
+
+    Opt-in only, via `ICM_DEV_AUTH=1` — never on unless the environment says so,
+    so a misconfigured deploy can't accidentally ship an unauthenticated login.
+    """
+    return os.environ.get("ICM_DEV_AUTH", "").strip().lower() in {"1", "true", "yes"}
+
+
+def require_dev_auth() -> None:
+    if not dev_auth_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
 def get_auth_service(

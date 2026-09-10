@@ -1,8 +1,12 @@
+import os
+from collections.abc import Iterator
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session as DBSession
 from sqlmodel import select
 
-from icm_platform.models import Workspace
+from icm_platform.models import User, Workspace
 from tests.fakes import FakeEmailPort
 
 
@@ -77,3 +81,56 @@ def test_session_persists_across_requests_until_logout(
     client.post("/auth/logout")
 
     assert client.get("/workspace/api").status_code == 401
+
+
+@pytest.fixture
+def dev_auth_enabled() -> Iterator[None]:
+    os.environ["ICM_DEV_AUTH"] = "1"
+    try:
+        yield
+    finally:
+        del os.environ["ICM_DEV_AUTH"]
+
+
+def test_dev_login_is_a_404_when_the_flag_is_off(client: TestClient) -> None:
+    response = client.post("/auth/dev-login", data={"email": "walker@example.com"})
+    assert response.status_code == 404
+
+
+def test_login_page_has_no_dev_form_when_the_flag_is_off(client: TestClient) -> None:
+    response = client.get("/auth/login")
+    assert "dev-login" not in response.text
+
+
+def test_dev_login_signs_in_without_a_magic_link(
+    client: TestClient, dev_auth_enabled: None
+) -> None:
+    response = client.post(
+        "/auth/dev-login", data={"email": "walker@example.com"}, follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+    assert "session_token" in response.cookies
+
+    workspace_response = client.get("/workspace/api")
+    assert workspace_response.status_code == 200
+    assert workspace_response.json()["name"] == "walker@example.com's workspace"
+
+
+def test_dev_login_reuses_the_existing_user_on_a_second_sign_in(
+    client: TestClient, dev_auth_enabled: None, db_session: DBSession
+) -> None:
+    client.post("/auth/dev-login", data={"email": "walker@example.com"})
+    client.post("/auth/logout")
+    client.post("/auth/dev-login", data={"email": "walker@example.com"})
+
+    users = db_session.exec(select(User).where(User.email == "walker@example.com")).all()
+    assert len(users) == 1
+
+
+def test_login_page_offers_dev_sign_in_when_the_flag_is_on(
+    client: TestClient, dev_auth_enabled: None
+) -> None:
+    response = client.get("/auth/login")
+    assert "dev-login" in response.text

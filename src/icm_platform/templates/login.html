@@ -8,5 +8,12 @@
       <button type="submit">Send magic link</button>
     </form>
     {% if sent %}<p>Check your email (or the server log) for a magic link.</p>{% endif %}
+    {% if dev_auth %}
+    <hr />
+    <form method="post" action="/auth/dev-login">
+      <input type="email" name="email" placeholder="you@example.com" required />
+      <button type="submit">Dev sign in (skips the magic link)</button>
+    </form>
+    {% endif %}
   </body>
 </html>

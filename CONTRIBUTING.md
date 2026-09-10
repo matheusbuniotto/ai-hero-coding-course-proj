@@ -30,6 +30,11 @@ and `/workspaces` to the API, so the magic-link session cookie stays same-origin
 from the UI's origin: the magic link is printed to the API's console and opening it lands
 you back in the UI.
 
+To skip copying the link out of the console every time, set `ICM_DEV_AUTH=1` before
+starting the API (`ICM_DEV_AUTH=1 make dev`). The login page then also offers a "Dev sign
+in" form that signs you straight in as any email, no magic link involved. It 404s unless
+the flag is set, so it can't end up live by accident.
+
 Both halves take their port from one variable, so `make dev API_PORT=8123` moves the API
 and repoints the proxy at it together.
 
