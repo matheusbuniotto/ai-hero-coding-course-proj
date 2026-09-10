@@ -154,7 +154,6 @@ class SessionFile(SQLModel, table=True):
 
     @property
     def changed(self) -> bool:
-        """Whether the session changed this file from what it started as."""
         return self.content != self.base_content
 
 

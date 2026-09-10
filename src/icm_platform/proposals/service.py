@@ -1,5 +1,5 @@
 from sqlmodel import Session as DBSession
-from sqlmodel import select
+from sqlmodel import col, select
 
 from icm_platform.models import FileProposal, ProposalStatus, User, Workspace, WorkspaceFile
 from icm_platform.security import utcnow
@@ -83,6 +83,16 @@ class ProposalService:
             .where(FileProposal.status == ProposalStatus.pending)
         )
         return sorted(proposals, key=lambda p: p.created_at)
+
+    def list_for_session(self, workspace: Workspace, session_id: int) -> list[FileProposal]:
+        """Everything one agent session proposed, whatever became of it, oldest first."""
+        proposals = self.db.exec(
+            select(FileProposal)
+            .where(FileProposal.workspace_id == workspace.id)
+            .where(FileProposal.session_id == session_id)
+            .order_by(col(FileProposal.id))
+        )
+        return list(proposals)
 
     def list_history(self, workspace: Workspace) -> list[FileProposal]:
         proposals = self.db.exec(

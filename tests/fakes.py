@@ -37,6 +37,16 @@ class FakeAgentHarnessPort:
         return reply
 
 
+def wrote(*files: tuple[str, str]) -> SandboxResult:
+    """A successful sandbox run that wrote these `(path, content)` pairs."""
+    return SandboxResult(
+        exit_code=0,
+        stdout="",
+        stderr="",
+        files=[SandboxFile(path=path, content=content) for path, content in files],
+    )
+
+
 class FakeSandboxPort:
     """Deterministic stand-in for `SandboxPort` — never calls a hosted provider.
 

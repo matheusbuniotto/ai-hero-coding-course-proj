@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from icm_platform.agent.lifecycle import AgentSessionError
+from icm_platform.agent.lifecycle import AgentSessionError, SessionEndedError
 from icm_platform.deps import (
     AgentSessionServiceDep,
     CodeExecutionServiceDep,
@@ -93,6 +93,19 @@ def _conflict(exc: Exception) -> HTTPException:
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
+SessionResolver = Callable[[Workspace, User, AgentSession], list[FileProposal]]
+
+
+def _resolve_session(
+    resolve: SessionResolver, session: AgentSession, access: WorkspaceAccess
+) -> dict:
+    try:
+        resolved = resolve(access.workspace, access.user, session)
+    except SessionProposalError as exc:
+        raise _conflict(exc) from exc
+    return _session_proposal_json(session, resolved)
+
+
 def get_session(
     session_id: int, access: WorkspaceAccessDep, agent: AgentSessionServiceDep
 ) -> AgentSession:
@@ -131,7 +144,7 @@ def send_message(
     access.require(Permission.read)
     try:
         reply = agent.send_message(access.workspace, session, body.message)
-    except AgentSessionError as exc:
+    except SessionEndedError as exc:
         raise _conflict(exc) from exc
     return _message_json(reply)
 
@@ -155,7 +168,7 @@ def execute_code(
     access.require(Permission.run)
     try:
         return _execution_json(executions.execute(session, body.command))
-    except AgentSessionError as exc:
+    except SessionEndedError as exc:
         raise _conflict(exc) from exc
 
 
@@ -185,7 +198,7 @@ def submit_session_proposal(
     access.require(Permission.propose)
     try:
         submitted = session_proposals.submit(access.workspace, access.user, session)
-    except SessionProposalError as exc:
+    except SessionEndedError as exc:
         raise _conflict(exc) from exc
     return _session_proposal_json(session, submitted)
 
@@ -194,9 +207,9 @@ def submit_session_proposal(
 def get_session_proposal(
     session: SessionDep, access: WorkspaceAccessDep, session_proposals: SessionProposalServiceDep
 ) -> dict:
-    """The session's submitted diff, as far as it is still awaiting a decision."""
+    """The session's submitted diff, and where each of its files stands."""
     access.require(Permission.read)
-    return _session_proposal_json(session, session_proposals.pending(access.workspace, session))
+    return _session_proposal_json(session, session_proposals.submitted(access.workspace, session))
 
 
 @router.post("/sessions/{session_id}/proposal/approve")
@@ -215,16 +228,3 @@ def reject_session_proposal(
     """Drop the session's whole diff and its working copy, leaving the tree unchanged."""
     access.require(Permission.approve)
     return _resolve_session(session_proposals.reject, session, access)
-
-
-SessionResolver = Callable[[Workspace, User, AgentSession], list[FileProposal]]
-
-
-def _resolve_session(
-    resolve: SessionResolver, session: AgentSession, access: WorkspaceAccess
-) -> dict:
-    try:
-        resolved = resolve(access.workspace, access.user, session)
-    except SessionProposalError as exc:
-        raise _conflict(exc) from exc
-    return _session_proposal_json(session, resolved)
