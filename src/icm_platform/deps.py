@@ -119,6 +119,9 @@ class WorkspaceAccess:
     def tree(self) -> list[str]:
         return self._service.get_tree(self.workspace)
 
+    def agents(self) -> list[str]:
+        return self._service.list_agents(self.workspace)
+
     def members(self) -> list[WorkspaceMember]:
         return self._service.list_members(self.workspace)
 

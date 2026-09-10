@@ -1,0 +1,182 @@
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { App } from "./App";
+import { LOGIN_URL } from "./api";
+
+const ME = {
+  user: { id: 1, email: "walker@example.com" },
+  workspaces: [
+    { id: 1, name: "walker's workspace", kind: "personal", role: "owner" },
+    { id: 2, name: "Team Wiki", kind: "team", role: "editor" },
+  ],
+};
+
+const WORKSPACE = {
+  ...ME.workspaces[0],
+  agents: ["writer"],
+  tree: ["agents/writer/prompt.md", "notes.md"],
+};
+
+const EMPTY_WORKSPACE = { ...ME.workspaces[1], agents: [], tree: [] };
+
+/** A stand-in API: every path answers 200 with its canned body, unless overridden. */
+function fakeApi(bodies: Record<string, unknown>, status = 200) {
+  return vi.fn(async (url: string) => {
+    const path = url.split("?")[0];
+    return {
+      ok: status === 200,
+      status,
+      statusText: "error",
+      json: async () => (status === 200 ? bodies[path] : { detail: "nope" }),
+    } as Response;
+  });
+}
+
+function renderAt(path: string) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <App />
+    </MemoryRouter>,
+  );
+}
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", fakeApi({ "/me": ME, "/workspace/api": WORKSPACE }));
+  vi.stubGlobal("location", { assign: vi.fn() });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe("the workspace shell", () => {
+  it("shows the signed-in email, the current workspace and the role", async () => {
+    renderAt("/");
+    const topbar = within(await screen.findByRole("banner"));
+
+    expect(await topbar.findByText("walker@example.com")).toBeDefined();
+    // Scoped past the switcher's <option>, which carries the same name.
+    expect(await topbar.findByText(/walker's workspace/, { selector: ".workspace-name" }))
+      .toBeDefined();
+    expect(await topbar.findByText("owner")).toBeDefined();
+  });
+
+  it("offers all four top-level views", async () => {
+    renderAt("/w/1/library");
+
+    for (const label of ["Library", "Review", "History", "Members"]) {
+      expect(await screen.findByRole("link", { name: label })).toBeDefined();
+    }
+  });
+
+  it("renders the view named by the URL, so a reload lands in the same place", async () => {
+    renderAt("/w/1/history");
+
+    expect(await screen.findByRole("heading", { name: "History" })).toBeDefined();
+  });
+
+  it("lists the workspace's agents and files in the sidebar", async () => {
+    renderAt("/w/1/library");
+
+    const agents = within(await screen.findByRole("list", { name: "Agents" }));
+    const files = within(await screen.findByRole("list", { name: "Files" }));
+
+    expect(agents.getByText("writer")).toBeDefined();
+    expect(files.getByText("prompt.md")).toBeDefined();
+    expect(files.getByText("notes.md")).toBeDefined();
+  });
+
+  it("offers an empty state rather than a blank sidebar", async () => {
+    vi.stubGlobal("fetch", fakeApi({ "/me": ME, "/workspace/api": EMPTY_WORKSPACE }));
+
+    renderAt("/w/2/library");
+
+    expect(await screen.findByText("No agents yet")).toBeDefined();
+    expect(await screen.findByText("No files yet")).toBeDefined();
+  });
+
+  it("badges Review with the workspace's pending proposal count", async () => {
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({ "/me": ME, "/workspace/api": WORKSPACE, "/workspace/proposals": [{}, {}] }),
+    );
+
+    renderAt("/w/1/library");
+
+    const review = await screen.findByRole("link", { name: /Review/ });
+    expect(within(review).getByText("2")).toBeDefined();
+  });
+
+  it("keeps the linked workspace when the URL names a view that does not exist", async () => {
+    renderAt("/w/2/nonsense");
+
+    expect(await screen.findByRole("link", { name: "Library" })).toHaveProperty(
+      "pathname",
+      "/w/2/library",
+    );
+  });
+
+  it("lets the user switch to another workspace they belong to", async () => {
+    renderAt("/w/1/library");
+    const select = (await screen.findByLabelText(/Workspace/)) as HTMLSelectElement;
+
+    expect([...select.options].map((option) => option.text)).toEqual([
+      "walker's workspace",
+      "Team Wiki",
+    ]);
+  });
+
+  it("creates a team workspace from the name the user typed", async () => {
+    const created = { id: 3, name: "New Team", kind: "team", role: "owner" };
+    const fetch = fakeApi({ "/me": ME, "/workspace/api": WORKSPACE, "/workspaces": created });
+    vi.stubGlobal("fetch", fetch);
+    renderAt("/w/1/library");
+
+    fireEvent.change(await screen.findByLabelText("New workspace name"), {
+      target: { value: "New Team" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create team" }));
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "/workspaces",
+        expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "New Team" }) }),
+      ),
+    );
+    // ...and the shell moves to the workspace it just made, without unmounting first.
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith("/workspace/api?workspace_id=3", expect.anything()),
+    );
+  });
+
+  it("forks the current workspace under a new name", async () => {
+    const fork = { id: 4, name: "My Fork", kind: "team", role: "owner" };
+    const fetch = fakeApi({ "/me": ME, "/workspace/api": WORKSPACE, "/workspaces/1/fork": fork });
+    vi.stubGlobal("fetch", fetch);
+    renderAt("/w/1/library");
+
+    fireEvent.change(await screen.findByLabelText("New workspace name"), {
+      target: { value: "My Fork" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Fork this" }));
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "/workspaces/1/fork",
+        expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "My Fork" }) }),
+      ),
+    );
+  });
+
+  it("sends an unauthenticated user to the magic-link login page", async () => {
+    vi.stubGlobal("fetch", fakeApi({}, 401));
+
+    renderAt("/");
+
+    await waitFor(() => expect(window.location.assign).toHaveBeenCalledWith(LOGIN_URL));
+    expect(screen.queryByText(/Error/)).toBeNull();
+  });
+});

@@ -1,0 +1,134 @@
+:root {
+  --line: #e2e2e6;
+  --muted: #6b6b76;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  color: #1c1c20;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.topbar,
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar {
+  justify-content: space-between;
+}
+
+.switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.switcher label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.workspace-name {
+  font-weight: 600;
+}
+
+.role {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #eeeef2;
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.email {
+  color: var(--muted);
+}
+
+.tab {
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.tab.active {
+  background: #eeeef2;
+  color: inherit;
+  font-weight: 600;
+}
+
+.badge {
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: #b4232c;
+  color: white;
+  font-size: 0.75rem;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar {
+  width: 260px;
+  padding: 1rem;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+.sidebar h2 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.sidebar ul {
+  margin: 0;
+  padding-left: 1rem;
+  list-style: none;
+}
+
+.tree .folder {
+  font-weight: 600;
+}
+
+.main {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.notice,
+.empty {
+  color: var(--muted);
+}
+
+.error {
+  color: #b4232c;
+}

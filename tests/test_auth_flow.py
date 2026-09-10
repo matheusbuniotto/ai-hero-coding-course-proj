@@ -20,7 +20,7 @@ def test_full_magic_link_sign_in_creates_workspace(
 
     verify_response = client.get(f"/auth/verify?token={token}", follow_redirects=False)
     assert verify_response.status_code == 303
-    assert verify_response.headers["location"] == "/workspace"
+    assert verify_response.headers["location"] == "/"
     assert "session_token" in verify_response.cookies
 
     workspace_response = client.get("/workspace/api")

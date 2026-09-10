@@ -2,8 +2,9 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from icm_platform.deps import CurrentUser, WorkspaceAccessDep, WorkspaceServiceDep
-from icm_platform.models import Workspace, WorkspaceMember, WorkspaceRole
+from icm_platform.models import User, Workspace, WorkspaceMember, WorkspaceRole
 from icm_platform.workspace.permissions import Permission
+from icm_platform.workspace.service import WorkspaceService
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
@@ -26,6 +27,11 @@ def workspace_json(workspace: Workspace, role: WorkspaceRole) -> dict:
     return {"id": workspace.id, "name": workspace.name, "kind": workspace.kind, "role": role}
 
 
+def memberships_json(user: User, service: WorkspaceService) -> list[dict]:
+    """Every workspace the user belongs to, each carrying their own role in it."""
+    return [workspace_json(m.workspace, m.role) for m in service.list_memberships(user)]
+
+
 def _member_json(member: WorkspaceMember) -> dict:
     return {"user_id": member.user_id, "email": member.user.email, "role": member.role}
 
@@ -40,7 +46,7 @@ def create_workspace(
 
 @router.get("")
 def list_workspaces(user: CurrentUser, service: WorkspaceServiceDep) -> list[dict]:
-    return [workspace_json(m.workspace, m.role) for m in service.list_memberships(user)]
+    return memberships_json(user, service)
 
 
 @router.get("/{workspace_id}/members")

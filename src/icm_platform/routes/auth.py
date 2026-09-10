@@ -12,6 +12,9 @@ from icm_platform.workspace.service import WorkspaceService
 router = APIRouter(prefix="/auth", tags=["auth"])
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+WORKSPACE_APP_URL = "/"
+"""Where a fresh session lands: the workspace UI, which the dev server serves at the root."""
+
 
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request) -> HTMLResponse:
@@ -41,7 +44,7 @@ def verify_magic_link(
 
     user, session_token = result
     workspace_service.ensure_personal_workspace(user)
-    response = RedirectResponse(url="/workspace", status_code=303)
+    response = RedirectResponse(url=WORKSPACE_APP_URL, status_code=303)
     response.set_cookie(
         key=SESSION_COOKIE,
         value=session_token,

@@ -46,7 +46,10 @@ def view_workspace(request: Request, access: WorkspaceAccessDep) -> HTMLResponse
 @router.get("/api")
 def get_workspace_json(access: WorkspaceAccessDep) -> dict:
     access.require(Permission.read)
-    return workspace_json(access.workspace, access.role) | {"tree": access.tree()}
+    return workspace_json(access.workspace, access.role) | {
+        "agents": access.agents(),
+        "tree": access.tree(),
+    }
 
 
 @router.post("/files/propose")

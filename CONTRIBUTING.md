@@ -3,7 +3,7 @@
 ## Local setup
 
 ```bash
-uv sync --all-groups
+make install
 uvx prek install
 ```
 
@@ -16,6 +16,29 @@ uvx prek run --all-files
 ```
 
 CI runs the same suite on every pull request.
+
+## Running the app
+
+```bash
+make dev   # API on :8000 and the workspace UI on :5173, Ctrl-C stops both
+```
+
+`make api` and `make ui` run either half on its own.
+
+Open the UI at <http://localhost:5173>. Its dev server proxies `/me`, `/auth`, `/workspace`
+and `/workspaces` to the API, so the magic-link session cookie stays same-origin. Sign in
+from the UI's origin: the magic link is printed to the API's console and opening it lands
+you back in the UI.
+
+Both halves take their port from one variable, so `make dev API_PORT=8123` moves the API
+and repoints the proxy at it together.
+
+## Tests and checks
+
+```bash
+make test    # pytest + vitest
+make check   # ruff, ty, and tsc
+```
 
 ## Secrets baseline
 
