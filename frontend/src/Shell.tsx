@@ -9,12 +9,21 @@ import { canClose, closedPanes, PANE_LABELS } from "./layout";
 import type { ChatWidth, PaneState } from "./layout";
 import { MembersTab } from "./MembersTab";
 import { OutputPanel } from "./OutputPanel";
+import { ResizeHandle } from "./ResizeHandle";
 import { ReviewTab } from "./ReviewTab";
 import { Sidebar } from "./Sidebar";
+import { usePersistedNumber } from "./usePersistedNumber";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { VIEWS } from "./views";
 import type { View } from "./views";
 import { useAsync } from "./useAsync";
+
+const CHAT_WIDTH_BOUNDS = { min: 320, max: 900 };
+const OUTPUT_HEIGHT_BOUNDS = { min: 120, max: 700 };
+
+function clamp(value: number, { min, max }: { min: number; max: number }): number {
+  return Math.min(max, Math.max(min, value));
+}
 
 interface ShellProps {
   me: Me;
@@ -38,6 +47,8 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
   const outputOpen = searchParams.get(OUTPUT_PARAM) === "1";
   const chatWidth = asChatWidth(searchParams.get(CHAT_PARAM));
   const [lastFilePath, setLastFilePath] = useState<string | null>(null);
+  const [chatWidthPx, setChatWidthPx] = usePersistedNumber("shell.chatWidthPx", 420);
+  const [outputHeightPx, setOutputHeightPx] = usePersistedNumber("shell.outputHeightPx", 260);
 
   useEffect(() => {
     if (openPath) setLastFilePath(openPath);
@@ -82,6 +93,8 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
     if (width === "normal") next.delete(CHAT_PARAM);
     else next.set(CHAT_PARAM, width);
     setSearchParams(next);
+    if (width === "normal") setChatWidthPx(420);
+    if (width === "wide") setChatWidthPx(800);
   }
 
   function reopen(pane: "file" | "output" | "chat") {
@@ -142,24 +155,42 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
                 />
               </main>
               {outputOpen && (
-                <OutputPanel
-                  workspaceId={workspaceId}
-                  agentName={activeAgent}
-                  onClose={closeOutput}
-                  canClose={canClose(paneState, "output")}
-                />
+                <>
+                  <ResizeHandle
+                    orientation="horizontal"
+                    label="Resize sandbox output"
+                    onDrag={(delta) =>
+                      setOutputHeightPx(clamp(outputHeightPx - delta, OUTPUT_HEIGHT_BOUNDS))
+                    }
+                  />
+                  <OutputPanel
+                    workspaceId={workspaceId}
+                    agentName={activeAgent}
+                    onClose={closeOutput}
+                    canClose={canClose(paneState, "output")}
+                    heightPx={outputHeightPx}
+                  />
+                </>
               )}
             </div>
             {chatWidth !== "hidden" && (
-              <Chat
-                workspaceId={workspaceId}
-                agentName={activeAgent}
-                role={workspace.data?.role ?? "viewer"}
-                width={chatWidth}
-                onWidthChange={setChatWidth}
-                canHide={canClose(paneState, "chat")}
-                onProposalsChanged={pending.reload}
-              />
+              <>
+                <ResizeHandle
+                  orientation="vertical"
+                  label="Resize chat"
+                  onDrag={(delta) => setChatWidthPx(clamp(chatWidthPx - delta, CHAT_WIDTH_BOUNDS))}
+                />
+                <Chat
+                  workspaceId={workspaceId}
+                  agentName={activeAgent}
+                  role={workspace.data?.role ?? "viewer"}
+                  width={chatWidth}
+                  widthPx={chatWidthPx}
+                  onWidthChange={setChatWidth}
+                  canHide={canClose(paneState, "chat")}
+                  onProposalsChanged={pending.reload}
+                />
+              </>
             )}
           </div>
           <StatusBar paneState={paneState} onReopen={reopen} canReopenFile={lastFilePath !== null} />

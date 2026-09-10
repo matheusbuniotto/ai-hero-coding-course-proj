@@ -13,6 +13,7 @@ interface ChatProps {
   agentName: string | null;
   role: WorkspaceRole;
   width?: ChatWidth;
+  widthPx?: number;
   onWidthChange?: (width: ChatWidth) => void;
   canHide?: boolean;
   onProposalsChanged?: () => void;
@@ -29,6 +30,7 @@ export function Chat({
   agentName,
   role,
   width = "normal",
+  widthPx,
   onWidthChange,
   canHide = true,
   onProposalsChanged,
@@ -38,7 +40,11 @@ export function Chat({
   const canSend = role !== "viewer" && session !== null && !isEnded(session);
 
   return (
-    <aside className={`chat-column chat-${width}`} aria-label="Agent session">
+    <aside
+      className={`chat-column chat-${width}`}
+      style={widthPx ? { width: widthPx } : undefined}
+      aria-label="Agent session"
+    >
       {onWidthChange && (
         <div className="chat-controls">
           <button

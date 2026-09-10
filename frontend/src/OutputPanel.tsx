@@ -10,12 +10,13 @@ interface OutputPanelProps {
   agentName: string | null;
   onClose: () => void;
   canClose: boolean;
+  heightPx?: number;
 }
 
 /** How long a session stays open before the panel stops polling for new runs. */
 const POLL_MS = 3000;
 
-export function OutputPanel({ workspaceId, agentName, onClose, canClose }: OutputPanelProps) {
+export function OutputPanel({ workspaceId, agentName, onClose, canClose, heightPx }: OutputPanelProps) {
   const { session } = useActiveSession(workspaceId, agentName);
   const live = session !== null && session.ended_at === null;
 
@@ -32,7 +33,11 @@ export function OutputPanel({ workspaceId, agentName, onClose, canClose }: Outpu
   }, [live, session?.id]);
 
   return (
-    <section className="output-panel" aria-label="Sandbox output">
+    <section
+      className="output-panel"
+      style={heightPx ? { height: heightPx, flex: "0 0 auto" } : undefined}
+      aria-label="Sandbox output"
+    >
       <div className="output-panel-bar">
         <span className="output-panel-title">Sandbox output</span>
         <button

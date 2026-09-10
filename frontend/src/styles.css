@@ -1,13 +1,71 @@
 :root {
-  --line: #e2e2e6;
-  --muted: #6b6b76;
+  /* Rosé Pine Dawn neutrals */
+  --bg: #faf4ed;
+  --surface: #fffaf3;
+  --line: #dfdad9;
+  --highlight-low: #f4ede8;
+  --muted: #797593;
+
+  /* Accent: Rosé (chosen from the visual-refresh prototype, see prototype/visual-refresh) */
+  --accent: #b4637a;
+  --accent-tint: #f3e2e6;
+  --accent-text: #883f54;
+  --danger: #b4232c;
+  --danger-tint: #fbe4e5;
+  --warn-tint: #fbeed9;
+  --warn-text: #8a5a12;
+
+  --radius: 3px;
+  --shadow: 0 1px 3px rgba(180, 99, 122, 0.16);
+
   font-family: ui-sans-serif, system-ui, sans-serif;
   font-size: 15px;
-  color: #1c1c20;
+  color: #575279;
 }
 
 body {
   margin: 0;
+  background: var(--bg);
+}
+
+/* Thin, unobtrusive scrollbars everywhere a pane scrolls internally */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+.resize-handle {
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.resize-handle:hover,
+.resize-handle:active {
+  background: var(--accent-tint);
+}
+
+.resize-handle-vertical {
+  width: 5px;
+  cursor: col-resize;
+}
+
+.resize-handle-horizontal {
+  height: 5px;
+  cursor: row-resize;
 }
 
 .shell {
@@ -23,6 +81,7 @@ body {
   gap: 1rem;
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--line);
+  background: var(--surface);
 }
 
 .topbar {
@@ -40,6 +99,55 @@ body {
   align-items: center;
   gap: 0.4rem;
   color: var(--muted);
+  font-size: 0.85rem;
+}
+
+select,
+input:not([type="checkbox"]):not([type="radio"]) {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  appearance: none;
+}
+
+select {
+  padding-right: 1.6rem;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.9rem) center,
+    calc(100% - 0.65rem) center;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+
+select:focus,
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.switcher button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.switcher button:disabled {
+  background: var(--muted);
+  cursor: default;
 }
 
 .identity {
@@ -55,10 +163,10 @@ body {
 .role {
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
-  background: #eeeef2;
+  background: var(--accent-tint);
   font-weight: 400;
   font-size: 0.8rem;
-  color: var(--muted);
+  color: var(--accent-text);
 }
 
 .email {
@@ -73,8 +181,9 @@ body {
 }
 
 .tab.active {
-  background: #eeeef2;
-  color: inherit;
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  border-radius: var(--radius);
   font-weight: 600;
 }
 
@@ -82,7 +191,7 @@ body {
   margin-left: 0.35rem;
   padding: 0.05rem 0.4rem;
   border-radius: 999px;
-  background: #b4232c;
+  background: var(--danger);
   color: white;
   font-size: 0.75rem;
 }
@@ -175,15 +284,16 @@ body {
 }
 
 .execution-entry {
-  border-radius: 6px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   padding: 0.5rem 0.7rem;
+  background: var(--surface);
 }
 
 .execution-failed,
 .execution-errored {
-  border-color: #e6b3b3;
-  background: #fdf2f2;
+  border-color: var(--danger);
+  background: var(--danger-tint);
 }
 
 .execution-summary {
@@ -202,7 +312,7 @@ body {
 }
 
 .execution-status-failed {
-  color: #b4232c;
+  color: var(--danger);
 }
 
 .execution-command {
@@ -248,7 +358,7 @@ body {
 .statusbar-item {
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: white;
+  background: var(--surface);
   padding: 0.15rem 0.6rem;
   cursor: pointer;
   color: inherit;
@@ -266,7 +376,7 @@ body {
 }
 
 .error {
-  color: #b4232c;
+  color: var(--danger);
 }
 
 .file-link {
@@ -289,9 +399,9 @@ body {
 
 .in-review {
   padding: 0.05rem 0.4rem;
-  border-radius: 999px;
-  background: #fdf0d5;
-  color: #9a6700;
+  border-radius: var(--radius);
+  background: var(--warn-tint);
+  color: var(--warn-text);
   font-size: 0.7rem;
 }
 
@@ -318,13 +428,29 @@ body {
   font-weight: 600;
 }
 
-.file-tab-close {
+.file-tab-close,
+.pane-close {
   border: none;
   background: none;
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
   color: var(--muted);
+  padding: 0.15rem 0.35rem;
+  border-radius: var(--radius);
+}
+
+.file-tab-close:hover,
+.pane-close:hover {
+  background: var(--highlight-low);
+  color: var(--accent-text);
+}
+
+.file-tab-close:disabled,
+.pane-close:disabled {
+  color: var(--line);
+  cursor: default;
+  background: none;
 }
 
 .document {
@@ -373,8 +499,8 @@ body {
 
 .chat-controls button {
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: white;
+  border-radius: var(--radius);
+  background: var(--surface);
   cursor: pointer;
   padding: 0.15rem 0.5rem;
   color: inherit;
@@ -399,9 +525,9 @@ body {
 
 .chat-ended {
   padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  background: #fdf0d5;
-  color: #9a6700;
+  border-radius: var(--radius);
+  background: var(--warn-tint);
+  color: var(--warn-text);
 }
 
 .chat-log {
@@ -413,8 +539,9 @@ body {
 }
 
 .turn {
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0.5rem 0.75rem;
+  box-shadow: var(--shadow);
 }
 
 .turn p {
@@ -430,11 +557,11 @@ body {
 }
 
 .turn-user {
-  background: #eeeef2;
+  background: var(--highlight-low);
 }
 
 .turn-assistant {
-  background: #eaf3ff;
+  background: var(--accent-tint);
 }
 
 .turn-pending {
@@ -468,7 +595,26 @@ body {
   font: inherit;
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
+}
+
+.chat-composer button,
+.chat-end button,
+.chat-empty button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.chat-composer button:disabled,
+.chat-end button:disabled,
+.chat-empty button:disabled {
+  background: var(--muted);
+  cursor: default;
 }
 
 .chat-end {
@@ -480,10 +626,32 @@ body {
 
 .session-proposal-card {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0.75rem 1rem;
   margin-top: 0.75rem;
-  background: #fafafc;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.session-proposal-actions button,
+.proposal-entry-actions button,
+.invite-form button,
+.member-entry button,
+.show-output {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.session-proposal-actions button:disabled,
+.proposal-entry-actions button:disabled,
+.invite-form button:disabled {
+  background: var(--muted);
+  cursor: default;
 }
 
 .session-proposal-title {
@@ -560,8 +728,10 @@ body {
 
 .proposal-entry {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0.6rem 0.8rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .proposal-entry-bar,
@@ -586,8 +756,10 @@ body {
 
 .history-entry {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0.5rem 0.8rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .history-entry-status {
@@ -602,7 +774,7 @@ body {
 }
 
 .history-status-rejected {
-  color: #b4232c;
+  color: var(--danger);
 }
 
 .history-entry-when {
@@ -612,8 +784,10 @@ body {
 
 .member-entry {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0.5rem 0.8rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .invite-form {
@@ -631,10 +805,3 @@ body {
   color: var(--muted);
 }
 
-.invite-form input,
-.invite-form select {
-  font: inherit;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
