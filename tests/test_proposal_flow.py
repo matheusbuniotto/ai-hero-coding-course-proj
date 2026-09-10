@@ -70,3 +70,24 @@ def test_new_proposal_supersedes_pending_one_for_same_path(
 def test_proposal_endpoints_require_auth(client: TestClient) -> None:
     response = client.post("/workspace/files/propose", json={"path": "notes.md", "content": "hi"})
     assert response.status_code == 401
+
+
+def test_get_file_returns_canonical_content(client: TestClient, email_port: FakeEmailPort) -> None:
+    _sign_in(client, email_port, "walker@example.com")
+    proposal = client.post(
+        "/workspace/files/propose", json={"path": "notes.md", "content": "hello"}
+    ).json()
+    client.post(f"/workspace/proposals/{proposal['id']}/approve")
+
+    response = client.get("/workspace/files?path=notes.md")
+
+    assert response.status_code == 200
+    assert response.json() == {"path": "notes.md", "content": "hello"}
+
+
+def test_get_file_404s_for_unknown_path(client: TestClient, email_port: FakeEmailPort) -> None:
+    _sign_in(client, email_port, "walker@example.com")
+
+    response = client.get("/workspace/files?path=nope.md")
+
+    assert response.status_code == 404

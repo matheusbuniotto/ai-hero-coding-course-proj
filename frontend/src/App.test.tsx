@@ -180,3 +180,96 @@ describe("the workspace shell", () => {
     expect(screen.queryByText(/Error/)).toBeNull();
   });
 });
+
+describe("reading a file in the library", () => {
+  const FILE = { path: "notes.md", content: "# Notes\n\nHello there." };
+
+  it("opens a file from the sidebar and renders its canonical content", async () => {
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({ "/me": ME, "/workspace/api": WORKSPACE, "/workspace/files": FILE }),
+    );
+    renderAt("/w/1/library");
+
+    fireEvent.click(await screen.findByRole("button", { name: /notes\.md/ }));
+
+    expect(await screen.findByText(/# Notes/)).toBeDefined();
+    expect(screen.getByText(/Hello there\./)).toBeDefined();
+  });
+
+  it("shows the open file in a closable tab, and closing it leaves the shell intact", async () => {
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({ "/me": ME, "/workspace/api": WORKSPACE, "/workspace/files": FILE }),
+    );
+    renderAt("/w/1/library");
+    fireEvent.click(await screen.findByRole("button", { name: /notes\.md/ }));
+    await screen.findByText(/# Notes/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close notes.md" }));
+
+    expect(screen.queryByText(/# Notes/)).toBeNull();
+    // The shell and sidebar are still there, ready to open another file.
+    expect(await screen.findByRole("button", { name: /notes\.md/ })).toBeDefined();
+    expect(screen.getByRole("list", { name: "Agents" })).toBeDefined();
+  });
+
+  it("keeps the open file across a reload, via the URL", async () => {
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({ "/me": ME, "/workspace/api": WORKSPACE, "/workspace/files": FILE }),
+    );
+
+    renderAt("/w/1/library?file=notes.md");
+
+    expect(await screen.findByText(/# Notes/)).toBeDefined();
+  });
+
+  it("marks a file with a pending proposal as having a change in review", async () => {
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({
+        "/me": ME,
+        "/workspace/api": WORKSPACE,
+        "/workspace/proposals": [{ id: 1, path: "notes.md", status: "pending" }],
+      }),
+    );
+
+    renderAt("/w/1/library");
+
+    const notesLink = await screen.findByRole("button", { name: /notes\.md/ });
+    expect(within(notesLink).getByText("in review")).toBeDefined();
+  });
+
+  it("refuses to render a file the caller may not read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({ "/me": ME, "/workspace/api": WORKSPACE, "/workspace/files": FILE }, 403),
+    );
+
+    renderAt("/w/1/library?file=notes.md");
+
+    expect(await screen.findByText(/nope/)).toBeDefined();
+    expect(screen.queryByText(/# Notes/)).toBeNull();
+  });
+
+  it("lets a viewer open and read a file", async () => {
+    const viewerMe = {
+      ...ME,
+      workspaces: [{ ...WORKSPACE, role: "viewer" }],
+    };
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({
+        "/me": viewerMe,
+        "/workspace/api": { ...WORKSPACE, role: "viewer" },
+        "/workspace/files": FILE,
+      }),
+    );
+
+    renderAt("/w/1/library");
+    fireEvent.click(await screen.findByRole("button", { name: /notes\.md/ }));
+
+    expect(await screen.findByText(/# Notes/)).toBeDefined();
+  });
+});

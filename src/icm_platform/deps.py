@@ -119,6 +119,9 @@ class WorkspaceAccess:
     def tree(self) -> list[str]:
         return self._service.get_tree(self.workspace)
 
+    def file_content(self, path: str) -> str | None:
+        return self._service.get_file_content(self.workspace, path)
+
     def agents(self) -> list[str]:
         return self._service.list_agents(self.workspace)
 

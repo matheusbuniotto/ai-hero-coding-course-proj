@@ -121,6 +121,15 @@ class WorkspaceService:
         """Paths of the workspace's canonical (approved) files, sorted."""
         return [f.path for f in self.list_files(workspace)]
 
+    def get_file_content(self, workspace: Workspace, path: str) -> str | None:
+        """Canonical (approved) content of one file, or None if it doesn't exist."""
+        file = self.db.exec(
+            select(WorkspaceFile)
+            .where(WorkspaceFile.workspace_id == workspace.id)
+            .where(WorkspaceFile.path == path)
+        ).first()
+        return file.content if file is not None else None
+
     def list_files(self, workspace: Workspace) -> list[WorkspaceFile]:
         """The workspace's canonical (approved) files, sorted by path."""
         return self._files(workspace, path_prefix=None)

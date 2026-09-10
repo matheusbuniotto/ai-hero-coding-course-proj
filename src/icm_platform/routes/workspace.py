@@ -52,6 +52,17 @@ def get_workspace_json(access: WorkspaceAccessDep) -> dict:
     }
 
 
+@router.get("/files")
+def get_file(path: str, access: WorkspaceAccessDep) -> dict:
+    access.require(Permission.read)
+    content = access.file_content(path)
+    if content is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No file {path!r} in this workspace"
+        )
+    return {"path": path, "content": content}
+
+
 @router.post("/files/propose")
 def propose_file(
     body: ProposeFileRequest, access: WorkspaceAccessDep, proposals: ProposalServiceDep

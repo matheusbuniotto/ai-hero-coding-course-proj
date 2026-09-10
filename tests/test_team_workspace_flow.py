@@ -142,6 +142,23 @@ def test_non_member_cannot_touch_the_workspace(
         ).status_code
         == 403
     )
+    assert outsider.get(f"/workspace/files?path=a.md&workspace_id={team_id}").status_code == 403
+
+
+def test_viewer_can_read_a_file(
+    owner: TestClient, team_id: int, sign_in_as: Callable[[str], TestClient]
+) -> None:
+    _invite(owner, team_id, VIEWER, "viewer")
+    proposal = owner.post(
+        f"/workspace/files/propose?workspace_id={team_id}", json={"path": "a.md", "content": "hi"}
+    ).json()
+    owner.post(f"/workspace/proposals/{proposal['id']}/approve?workspace_id={team_id}")
+    viewer = sign_in_as(VIEWER)
+
+    response = viewer.get(f"/workspace/files?path=a.md&workspace_id={team_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {"path": "a.md", "content": "hi"}
 
 
 def test_team_workspace_is_separate_from_the_personal_one(owner: TestClient, team_id: int) -> None:

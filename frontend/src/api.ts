@@ -18,6 +18,17 @@ export interface WorkspaceDetail extends WorkspaceSummary {
   tree: string[];
 }
 
+export interface Proposal {
+  id: number;
+  path: string;
+  status: "pending" | "approved" | "rejected" | "superseded";
+}
+
+export interface FileContent {
+  path: string;
+  content: string;
+}
+
 export const LOGIN_URL = "/auth/login";
 
 /** Thrown when the API answers 401; the caller has already been sent to the login page. */
@@ -60,7 +71,12 @@ export const api = {
     request<WorkspaceDetail>(`/workspace/api?workspace_id=${workspaceId}`),
 
   pendingProposals: (workspaceId: number) =>
-    request<unknown[]>(`/workspace/proposals?workspace_id=${workspaceId}`),
+    request<Proposal[]>(`/workspace/proposals?workspace_id=${workspaceId}`),
+
+  fileContent: (workspaceId: number, path: string) =>
+    request<FileContent>(
+      `/workspace/files?workspace_id=${workspaceId}&path=${encodeURIComponent(path)}`,
+    ),
 
   createWorkspace: (name: string) => post<WorkspaceSummary>("/workspaces", { name }),
 
