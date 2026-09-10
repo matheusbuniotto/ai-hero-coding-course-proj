@@ -1,6 +1,8 @@
 import { api } from "./api";
 import type { Proposal, WorkspaceRole } from "./api";
 import { DiffView } from "./DiffView";
+import { EmptyState } from "./EmptyState";
+import { Loading } from "./Loading";
 import { useAction } from "./useAction";
 import { useAsync } from "./useAsync";
 
@@ -20,9 +22,13 @@ export function ReviewTab({ workspaceId, role, onResolved }: ReviewTabProps) {
       {pending.error ? (
         <p className="notice error">{pending.error}</p>
       ) : !pending.data ? (
-        <p className="notice">Loading…</p>
+        <Loading label="Loading proposals" lines={3} className="loading-cards" />
       ) : pending.data.length === 0 ? (
-        <p className="notice">No proposals waiting for review.</p>
+        <EmptyState
+          icon="✅"
+          title="Nothing to review"
+          hint="Proposals an agent opens will show up here for approval."
+        />
       ) : (
         <ul className="proposal-list">
           {pending.data.map((proposal) => (

@@ -370,13 +370,79 @@ textarea:focus {
   color: var(--muted);
 }
 
-.notice,
-.empty {
+.notice {
   color: var(--muted);
 }
 
 .error {
   color: var(--danger);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.5rem 0;
+  color: var(--muted);
+}
+
+.empty-state-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.empty-state-title {
+  margin: 0;
+  font-weight: 600;
+  color: inherit;
+}
+
+.empty-state-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.loading-bar {
+  height: 0.85rem;
+  border-radius: var(--radius);
+  background: linear-gradient(
+    90deg,
+    var(--highlight-low) 25%,
+    var(--line) 50%,
+    var(--highlight-low) 75%
+  );
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.4s ease-in-out infinite;
+}
+
+.loading-cards {
+  gap: 0.75rem;
+}
+
+.loading-cards .loading-bar {
+  height: 2.4rem;
+}
+
+@keyframes loading-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar {
+    animation: none;
+  }
 }
 
 .file-link {

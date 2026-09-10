@@ -1,5 +1,7 @@
 import { api } from "./api";
 import type { Proposal } from "./api";
+import { EmptyState } from "./EmptyState";
+import { Loading } from "./Loading";
 import { useAsync } from "./useAsync";
 
 export function HistoryTab({ workspaceId }: { workspaceId: number }) {
@@ -14,9 +16,13 @@ export function HistoryTab({ workspaceId }: { workspaceId: number }) {
       {history.error ? (
         <p className="notice error">{history.error}</p>
       ) : !history.data ? (
-        <p className="notice">Loading…</p>
+        <Loading label="Loading history" lines={3} className="loading-cards" />
       ) : chronological.length === 0 ? (
-        <p className="notice">No approved or rejected changes yet.</p>
+        <EmptyState
+          icon="🕓"
+          title="No history yet"
+          hint="Approved and rejected changes will show up here."
+        />
       ) : (
         <ul className="history-list">
           {chronological.map((proposal) => (

@@ -4,6 +4,7 @@ import { api, ApiError } from "./api";
 import type { AgentMessage, AgentSessionSummary, SessionProposal, WorkspaceRole } from "./api";
 import type { ChatWidth } from "./layout";
 import { DiffView } from "./DiffView";
+import { Loading } from "./Loading";
 import { useAction } from "./useAction";
 import { useActiveSession } from "./useActiveSession";
 import { useAsync } from "./useAsync";
@@ -72,7 +73,7 @@ export function Chat({
       ) : sessions.error ? (
         <p className="notice error">{sessions.error}</p>
       ) : !sessions.data ? (
-        <p className="notice">Loading…</p>
+        <Loading label="Loading session" lines={4} className="loading-cards" />
       ) : session ? (
         <Transcript
           key={session.id}

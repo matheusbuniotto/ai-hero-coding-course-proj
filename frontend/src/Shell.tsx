@@ -7,6 +7,7 @@ import { Chat } from "./Chat";
 import { HistoryTab } from "./HistoryTab";
 import { canClose, closedPanes, PANE_LABELS } from "./layout";
 import type { ChatWidth, PaneState } from "./layout";
+import { Loading } from "./Loading";
 import { MembersTab } from "./MembersTab";
 import { OutputPanel } from "./OutputPanel";
 import { ResizeHandle } from "./ResizeHandle";
@@ -273,7 +274,7 @@ function ViewPanel({
   onOpenOutput,
   onProposalsChanged,
 }: ViewPanelProps) {
-  if (!workspace) return <p className="notice">Loading…</p>;
+  if (!workspace) return <Loading label="Loading workspace" lines={5} />;
   if (view === "library") {
     return (
       <Library

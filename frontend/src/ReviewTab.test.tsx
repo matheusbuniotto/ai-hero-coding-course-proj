@@ -37,7 +37,7 @@ describe("ReviewTab", () => {
     vi.stubGlobal("fetch", fakeApi({ "GET /workspace/proposals": () => [] }));
     render(<ReviewTab workspaceId={1} role="owner" />);
 
-    expect(await screen.findByText("No proposals waiting for review.")).toBeDefined();
+    expect(await screen.findByText("Nothing to review")).toBeDefined();
   });
 
   it("lists a pending proposal with its diff", async () => {
@@ -65,7 +65,7 @@ describe("ReviewTab", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
 
-    expect(await screen.findByText("No proposals waiting for review.")).toBeDefined();
+    expect(await screen.findByText("Nothing to review")).toBeDefined();
   });
 
   it("hides approve controls from an editor", async () => {

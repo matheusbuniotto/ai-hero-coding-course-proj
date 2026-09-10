@@ -1,6 +1,8 @@
 import type { WorkspaceDetail } from "./api";
+import { EmptyState } from "./EmptyState";
 import { buildTree } from "./fileTree";
 import type { TreeNode } from "./fileTree";
+import { Loading } from "./Loading";
 
 interface SidebarProps {
   workspace: WorkspaceDetail | null;
@@ -19,13 +21,22 @@ export function Sidebar({
   onSelectFile,
   onSelectAgent,
 }: SidebarProps) {
-  if (!workspace) return <aside className="sidebar" aria-busy="true" />;
+  if (!workspace) {
+    return (
+      <aside className="sidebar" aria-busy="true">
+        <h2>Agents</h2>
+        <Loading label="Loading agents" lines={2} />
+        <h2>Files</h2>
+        <Loading label="Loading files" lines={4} />
+      </aside>
+    );
+  }
 
   return (
     <aside className="sidebar">
       <h2>Agents</h2>
       {workspace.agents.length === 0 ? (
-        <p className="empty">No agents yet</p>
+        <EmptyState icon="🤖" title="No agents yet" hint="Agents your team adds will show up here." />
       ) : (
         <ul className="agents" aria-label="Agents">
           {workspace.agents.map((name) => (
@@ -44,7 +55,7 @@ export function Sidebar({
 
       <h2>Files</h2>
       {workspace.tree.length === 0 ? (
-        <p className="empty">No files yet</p>
+        <EmptyState icon="📄" title="No files yet" hint="Files an agent proposes will appear here." />
       ) : (
         <Nodes
           nodes={buildTree(workspace.tree)}

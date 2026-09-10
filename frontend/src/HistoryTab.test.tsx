@@ -20,7 +20,7 @@ describe("HistoryTab", () => {
     vi.stubGlobal("fetch", fakeApi({ "/workspace/history": [] }));
     render(<HistoryTab workspaceId={1} />);
 
-    expect(await screen.findByText("No approved or rejected changes yet.")).toBeDefined();
+    expect(await screen.findByText("No history yet")).toBeDefined();
   });
 
   it("lists resolved changes with their outcome", async () => {

@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { api, ApiError } from "./api";
 import type { Member, WorkspaceRole } from "./api";
+import { Loading } from "./Loading";
 import { useAsync } from "./useAsync";
 
 const ROLES: WorkspaceRole[] = ["viewer", "editor", "owner"];
@@ -16,7 +17,7 @@ export function MembersTab({ workspaceId, role }: { workspaceId: number; role: W
       {members.error ? (
         <p className="notice error">{members.error}</p>
       ) : !members.data ? (
-        <p className="notice">Loading…</p>
+        <Loading label="Loading members" lines={2} className="loading-cards" />
       ) : (
         <ul className="member-list">
           {members.data.map((member) => (
