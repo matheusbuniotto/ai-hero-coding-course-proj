@@ -179,6 +179,96 @@ describe("Chat", () => {
     expect(screen.queryByLabelText("Message")).toBeNull();
   });
 
+  it("lets an owner end a session and shows the save card with its changed files", async () => {
+    let ended = false;
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({
+        "GET /workspace/agent/sessions": () => [ended ? ENDED_SESSION : LIVE_SESSION],
+        "GET /workspace/agent/sessions/1/messages": () => [],
+        "GET /workspace/agent/sessions/2/messages": () => [],
+        "POST /workspace/agent/sessions/1/proposal": () => {
+          ended = true;
+          return {
+            session_id: 1,
+            ended_at: "2026-09-10T01:00:00Z",
+            changes: [{ proposal_id: 1, path: "notes.md", status: "pending", base_content: "old", proposed_content: "new" }],
+          };
+        },
+        "GET /workspace/agent/sessions/2/proposal": () => ({
+          session_id: 2,
+          ended_at: "2026-09-10T01:00:00Z",
+          changes: [{ proposal_id: 1, path: "notes.md", status: "pending", base_content: "old", proposed_content: "new" }],
+        }),
+      }),
+    );
+    render(<Chat workspaceId={1} agentName="support" role="owner" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "End session" }));
+
+    expect(await screen.findByText("Save this session?")).toBeDefined();
+    expect(screen.getByText("notes.md")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Discard" })).toBeDefined();
+  });
+
+  it("an editor sees the save card without approve controls", async () => {
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({
+        "GET /workspace/agent/sessions": () => [ENDED_SESSION],
+        "GET /workspace/agent/sessions/2/messages": () => [],
+        "GET /workspace/agent/sessions/2/proposal": () => ({
+          session_id: 2,
+          ended_at: "2026-09-10T01:00:00Z",
+          changes: [{ proposal_id: 1, path: "notes.md", status: "pending", base_content: "old", proposed_content: "new" }],
+        }),
+      }),
+    );
+    render(<Chat workspaceId={1} agentName="support" role="editor" />);
+
+    expect(await screen.findByText("Save this session?")).toBeDefined();
+    expect(screen.getByText("Waiting for an owner to review.")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+  });
+
+  it("lets an owner approve the session's diff from the inline card", async () => {
+    let resolved = false;
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({
+        "GET /workspace/agent/sessions": () => [ENDED_SESSION],
+        "GET /workspace/agent/sessions/2/messages": () => [],
+        "GET /workspace/agent/sessions/2/proposal": () => ({
+          session_id: 2,
+          ended_at: "2026-09-10T01:00:00Z",
+          changes: [
+            {
+            proposal_id: 1,
+            path: "notes.md",
+            status: resolved ? "approved" : "pending",
+            base_content: "old",
+            proposed_content: "new",
+          },
+          ],
+        }),
+        "POST /workspace/agent/sessions/2/proposal/approve": () => {
+          resolved = true;
+          return {
+            session_id: 2,
+            ended_at: "2026-09-10T01:00:00Z",
+            changes: [{ proposal_id: 1, path: "notes.md", status: "approved", base_content: "old", proposed_content: "new" }],
+          };
+        },
+      }),
+    );
+    render(<Chat workspaceId={1} agentName="support" role="owner" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+
+    expect(await screen.findByText(/all been resolved/)).toBeDefined();
+  });
+
   it("a viewer sees the transcript of a live session but cannot send", async () => {
     vi.stubGlobal(
       "fetch",

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "./api";
-import type { AgentMessage, AgentSessionSummary, WorkspaceRole } from "./api";
+import type { AgentMessage, AgentSessionSummary, SessionProposal, WorkspaceRole } from "./api";
 import type { ChatWidth } from "./layout";
+import { DiffView } from "./DiffView";
+import { useAction } from "./useAction";
 import { useActiveSession } from "./useActiveSession";
 import { useAsync } from "./useAsync";
 
@@ -13,6 +15,7 @@ interface ChatProps {
   width?: ChatWidth;
   onWidthChange?: (width: ChatWidth) => void;
   canHide?: boolean;
+  onProposalsChanged?: () => void;
 }
 
 /** A turn already confirmed by the server, or one still in flight / failed locally. */
@@ -28,6 +31,7 @@ export function Chat({
   width = "normal",
   onWidthChange,
   canHide = true,
+  onProposalsChanged,
 }: ChatProps) {
   const sessions = useActiveSession(workspaceId, agentName);
   const session = sessions.session;
@@ -69,7 +73,9 @@ export function Chat({
           workspaceId={workspaceId}
           session={session}
           canSend={canSend}
-          isViewer={role === "viewer"}
+          role={role}
+          onEnded={sessions.reload}
+          onProposalsChanged={onProposalsChanged}
         />
       ) : (
         <StartSession
@@ -128,13 +134,18 @@ function Transcript({
   workspaceId,
   session,
   canSend,
-  isViewer,
+  role,
+  onEnded,
+  onProposalsChanged,
 }: {
   workspaceId: number;
   session: AgentSessionSummary;
   canSend: boolean;
-  isViewer: boolean;
+  role: WorkspaceRole;
+  onEnded: () => void;
+  onProposalsChanged?: () => void;
 }) {
+  const isViewer = role === "viewer";
   const messages = useAsync<AgentMessage[]>(
     () => api.sessionMessages(workspaceId, session.id),
     [workspaceId, session.id],
@@ -142,6 +153,10 @@ function Transcript({
   const [localTurns, setLocalTurns] = useState<Turn[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const endSession = useAction(async () => {
+    await api.submitSessionProposal(workspaceId, session.id);
+    onEnded();
+  });
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -202,34 +217,133 @@ function Transcript({
           turns.map((turn) => <TurnView key={`${turn.kind}-${turn.id}`} turn={turn} />)
         )}
       </div>
-      {canSend ? (
-        <form
-          className="chat-composer"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send();
-          }}
-        >
-          <textarea
-            aria-label="Message"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send();
-              }
+      {isEnded(session) ? (
+        <SessionProposalCard
+          workspaceId={workspaceId}
+          session={session}
+          role={role}
+          onProposalsChanged={onProposalsChanged}
+        />
+      ) : canSend ? (
+        <>
+          <form
+            className="chat-composer"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send();
             }}
-            disabled={sending}
-          />
-          <button type="submit" disabled={sending || !text.trim()}>
-            {sending ? "Sending…" : "Send"}
-          </button>
-        </form>
+          >
+            <textarea
+              aria-label="Message"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+              disabled={sending}
+            />
+            <button type="submit" disabled={sending || !text.trim()}>
+              {sending ? "Sending…" : "Send"}
+            </button>
+          </form>
+          <div className="chat-end">
+            <button type="button" onClick={() => void endSession.run()} disabled={endSession.busy}>
+              {endSession.busy ? "Ending…" : "End session"}
+            </button>
+            {endSession.error && <p className="notice error">{endSession.error}</p>}
+          </div>
+        </>
       ) : (
-        !isEnded(session) &&
         isViewer && <p className="notice">Viewers cannot send messages.</p>
       )}
+    </div>
+  );
+}
+
+function SessionProposalCard({
+  workspaceId,
+  session,
+  role,
+  onProposalsChanged,
+}: {
+  workspaceId: number;
+  session: AgentSessionSummary;
+  role: WorkspaceRole;
+  onProposalsChanged?: () => void;
+}) {
+  const proposal = useAsync<SessionProposal>(
+    () => api.sessionProposal(workspaceId, session.id),
+    [workspaceId, session.id],
+  );
+  const canApprove = role === "owner";
+  const approve = useAction(async () => {
+    await api.approveSessionProposal(workspaceId, session.id);
+    proposal.reload();
+    onProposalsChanged?.();
+  });
+  const reject = useAction(async () => {
+    await api.rejectSessionProposal(workspaceId, session.id);
+    proposal.reload();
+    onProposalsChanged?.();
+  });
+  const busy = approve.busy || reject.busy;
+  const error = approve.error ?? reject.error;
+
+  if (proposal.error) return <p className="notice error">{proposal.error}</p>;
+  if (!proposal.data) return <p className="notice">Loading…</p>;
+
+  const changes = proposal.data.changes;
+  const allResolved = changes.length > 0 && changes.every((c) => c.status !== "pending");
+  // All-or-nothing only holds while every file is still untouched; a file resolved
+  // some other way (e.g. singly, from the Review tab) makes the session mixed.
+  const mixed = !allResolved && changes.some((c) => c.status !== "pending");
+
+  return (
+    <div className="session-proposal-card">
+      <p className="session-proposal-title">Save this session?</p>
+      {changes.length === 0 ? (
+        <p className="notice">Nothing changed in this session.</p>
+      ) : (
+        <ul className="session-proposal-files">
+          {changes.map((change) => (
+            <li key={change.proposal_id}>
+              <div className="session-proposal-file-bar">
+                <span>{change.path}</span>
+                {change.status !== "pending" && (
+                  <span className={`history-entry-status history-status-${change.status}`}>
+                    {change.status}
+                  </span>
+                )}
+              </div>
+              <DiffView base={change.base_content} proposed={change.proposed_content} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="notice error">{error}</p>}
+      {changes.length > 0 &&
+        (allResolved ? (
+          <p className="notice">This session's changes have all been resolved.</p>
+        ) : mixed ? (
+          <p className="notice">
+            Part of this session was already resolved elsewhere — approve or discard the rest
+            from the Review tab.
+          </p>
+        ) : canApprove ? (
+          <div className="session-proposal-actions">
+            <button type="button" onClick={() => void approve.run()} disabled={busy}>
+              Approve
+            </button>
+            <button type="button" onClick={() => void reject.run()} disabled={busy}>
+              Discard
+            </button>
+          </div>
+        ) : (
+          <p className="notice">Waiting for an owner to review.</p>
+        ))}
     </div>
   );
 }

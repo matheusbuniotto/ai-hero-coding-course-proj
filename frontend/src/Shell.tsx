@@ -4,9 +4,12 @@ import { NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "./api";
 import type { FileContent, Me, WorkspaceDetail } from "./api";
 import { Chat } from "./Chat";
+import { HistoryTab } from "./HistoryTab";
 import { canClose, closedPanes, PANE_LABELS } from "./layout";
 import type { ChatWidth, PaneState } from "./layout";
+import { MembersTab } from "./MembersTab";
 import { OutputPanel } from "./OutputPanel";
+import { ReviewTab } from "./ReviewTab";
 import { Sidebar } from "./Sidebar";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { VIEWS } from "./views";
@@ -135,6 +138,7 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
                   canCloseFile={canClose(paneState, "file")}
                   outputOpen={outputOpen}
                   onOpenOutput={openOutput}
+                  onProposalsChanged={pending.reload}
                 />
               </main>
               {outputOpen && (
@@ -154,6 +158,7 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
                 width={chatWidth}
                 onWidthChange={setChatWidth}
                 canHide={canClose(paneState, "chat")}
+                onProposalsChanged={pending.reload}
               />
             )}
           </div>
@@ -222,6 +227,7 @@ interface ViewPanelProps {
   canCloseFile: boolean;
   outputOpen: boolean;
   onOpenOutput: () => void;
+  onProposalsChanged: () => void;
 }
 
 function ViewPanel({
@@ -234,6 +240,7 @@ function ViewPanel({
   canCloseFile,
   outputOpen,
   onOpenOutput,
+  onProposalsChanged,
 }: ViewPanelProps) {
   if (!workspace) return <p className="notice">Loading…</p>;
   if (view === "library") {
@@ -250,14 +257,18 @@ function ViewPanel({
       />
     );
   }
-
-  const label = VIEWS.find((v) => v.slug === view)!.label;
-  return (
-    <section>
-      <h1>{label}</h1>
-      <p className="notice">{label} is not built yet.</p>
-    </section>
-  );
+  if (view === "review") {
+    return (
+      <ReviewTab workspaceId={workspaceId} role={workspace.role} onResolved={onProposalsChanged} />
+    );
+  }
+  if (view === "history") {
+    return <HistoryTab workspaceId={workspaceId} />;
+  }
+  if (view === "members") {
+    return <MembersTab workspaceId={workspaceId} role={workspace.role} />;
+  }
+  return view satisfies never;
 }
 
 function Library({
