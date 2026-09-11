@@ -926,3 +926,27 @@ textarea:focus {
   color: var(--muted);
 }
 
+.new-file-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  max-width: 32rem;
+}
+
+.new-file-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.new-file-form input,
+.new-file-form textarea {
+  font-family: inherit;
+}
+
+.new-file-form button {
+  align-self: flex-start;
+}

@@ -9,6 +9,7 @@ import { canClose, closedPanes, PANE_LABELS } from "./layout";
 import type { ChatWidth, PaneState } from "./layout";
 import { Loading } from "./Loading";
 import { MembersTab } from "./MembersTab";
+import { NewFileForm } from "./NewFileForm";
 import { OutputPanel } from "./OutputPanel";
 import { ResizeHandle } from "./ResizeHandle";
 import { ReviewTab } from "./ReviewTab";
@@ -98,6 +99,11 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
     if (width === "wide") setChatWidthPx(800);
   }
 
+  function fileProposed() {
+    pending.reload();
+    navigate(`/w/${workspaceId}/review`);
+  }
+
   function reopen(pane: "file" | "output" | "chat") {
     if (pane === "output") openOutput();
     else if (pane === "chat") setChatWidth("normal");
@@ -153,6 +159,7 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
                   outputOpen={outputOpen}
                   onOpenOutput={openOutput}
                   onProposalsChanged={pending.reload}
+                  onFileProposed={fileProposed}
                 />
               </main>
               {outputOpen && (
@@ -260,6 +267,7 @@ interface ViewPanelProps {
   outputOpen: boolean;
   onOpenOutput: () => void;
   onProposalsChanged: () => void;
+  onFileProposed: () => void;
 }
 
 function ViewPanel({
@@ -273,6 +281,7 @@ function ViewPanel({
   outputOpen,
   onOpenOutput,
   onProposalsChanged,
+  onFileProposed,
 }: ViewPanelProps) {
   if (!workspace) return <Loading label="Loading workspace" lines={5} />;
   if (view === "library") {
@@ -286,6 +295,7 @@ function ViewPanel({
         canCloseFile={canCloseFile}
         outputOpen={outputOpen}
         onOpenOutput={onOpenOutput}
+        onFileProposed={onFileProposed}
       />
     );
   }
@@ -312,6 +322,7 @@ function Library({
   canCloseFile,
   outputOpen,
   onOpenOutput,
+  onFileProposed,
 }: {
   workspace: WorkspaceDetail;
   workspaceId: number;
@@ -321,6 +332,7 @@ function Library({
   canCloseFile: boolean;
   outputOpen: boolean;
   onOpenOutput: () => void;
+  onFileProposed: () => void;
 }) {
   if (openPath) {
     return (
@@ -351,6 +363,9 @@ function Library({
         <button type="button" className="show-output" onClick={onOpenOutput}>
           Show sandbox output
         </button>
+      )}
+      {(workspace.role === "editor" || workspace.role === "owner") && (
+        <NewFileForm workspaceId={workspaceId} onCreated={onFileProposed} />
       )}
     </section>
   );

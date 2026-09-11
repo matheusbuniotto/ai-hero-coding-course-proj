@@ -171,6 +171,9 @@ export const api = {
   history: (workspaceId: number) =>
     request<Proposal[]>(`/workspace/history?workspace_id=${workspaceId}`),
 
+  proposeFile: (workspaceId: number, path: string, content: string) =>
+    post<Proposal>(`/workspace/files/propose?workspace_id=${workspaceId}`, { path, content }),
+
   approveProposal: (workspaceId: number, proposalId: number) =>
     post<Proposal>(`/workspace/proposals/${proposalId}/approve?workspace_id=${workspaceId}`, {}),
 
