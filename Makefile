@@ -1,4 +1,4 @@
-.PHONY: install dev api ui test test-api test-ui check
+.PHONY: install dev api ui test test-api test-ui test-e2e check
 
 # One port for both halves: the API binds it, the UI dev server proxies to it.
 API_PORT ?= 8000
@@ -25,6 +25,10 @@ test-api:
 
 test-ui:
 	npm --prefix frontend test
+
+# Playwright starts its own API (dev auth, temp DB) and UI dev server on separate ports.
+test-e2e:
+	npm --prefix frontend run e2e
 
 check:
 	uv run ruff check .

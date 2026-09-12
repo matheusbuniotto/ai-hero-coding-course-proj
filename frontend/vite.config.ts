@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { configDefaults } from "vitest/config";
 
 const API = process.env.API_URL ?? "http://127.0.0.1:8000";
 
@@ -16,5 +17,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    // Playwright specs live in e2e/ and run under `npm run e2e`, not vitest.
+    exclude: [...configDefaults.exclude, "e2e/**"],
   },
 });

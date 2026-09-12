@@ -122,7 +122,7 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
           view={view}
           onWorkspacesChanged={reloadMe}
         />
-        <Identity workspace={workspace.data} email={me.user.email} />
+        <span className="email">{me.user.email}</span>
       </header>
 
       <nav className="tabs">
@@ -243,19 +243,6 @@ function StatusBar({
         ))
       )}
     </footer>
-  );
-}
-
-function Identity({ workspace, email }: { workspace: WorkspaceDetail | null; email: string }) {
-  return (
-    <div className="identity">
-      {workspace && (
-        <span className="workspace-name">
-          {workspace.name} <span className="role">{workspace.role}</span>
-        </span>
-      )}
-      <span className="email">{email}</span>
-    </div>
   );
 }
 

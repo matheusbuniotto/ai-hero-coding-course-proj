@@ -6,4 +6,8 @@ __pycache__/
 coverage.xml
 .env
 workspace.db
+e2e.db
 PROJ-IDEA.md
+test-results/
+playwright-report/
+frontend/e2e/screenshots/
