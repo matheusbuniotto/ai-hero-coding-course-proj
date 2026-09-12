@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 .ruff_cache/
+.coverage
+coverage.xml
 .env
 workspace.db
 PROJ-IDEA.md
