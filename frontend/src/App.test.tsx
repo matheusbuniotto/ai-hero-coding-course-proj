@@ -58,7 +58,6 @@ describe("the workspace shell", () => {
     const topbar = within(await screen.findByRole("banner"));
 
     expect(await topbar.findByText("walker@example.com")).toBeDefined();
-    // Scoped past the switcher's <option>, which carries the same name.
     expect(await topbar.findByText(/walker's workspace/, { selector: ".workspace-name" }))
       .toBeDefined();
     expect(await topbar.findByText("owner")).toBeDefined();
@@ -121,12 +120,19 @@ describe("the workspace shell", () => {
 
   it("lets the user switch to another workspace they belong to", async () => {
     renderAt("/w/1/library");
-    const select = (await screen.findByLabelText(/Workspace/)) as HTMLSelectElement;
+    fireEvent.click(await screen.findByRole("button", { name: /walker's workspace/ }));
+    const list = within(screen.getByRole("list", { name: "Workspaces" }));
 
-    expect([...select.options].map((option) => option.text)).toEqual([
-      "walker's workspace",
-      "Team Wiki",
-    ]);
+    const names = list
+      .getAllByRole("button")
+      .map((item) => item.querySelector(".switcher-item-name")?.textContent);
+    expect(names).toEqual(["walker's workspace", "Team Wiki"]);
+
+    // Picking one closes the menu.
+    fireEvent.click(list.getByRole("button", { name: /Team Wiki/ }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Switch workspace" })).toBeNull(),
+    );
   });
 
   it("creates a team workspace from the name the user typed", async () => {
@@ -135,7 +141,8 @@ describe("the workspace shell", () => {
     vi.stubGlobal("fetch", fetch);
     renderAt("/w/1/library");
 
-    fireEvent.change(await screen.findByLabelText("New workspace name"), {
+    fireEvent.click(await screen.findByRole("button", { name: /walker's workspace/ }));
+    fireEvent.change(screen.getByLabelText("New workspace name"), {
       target: { value: "New Team" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create team" }));
@@ -158,7 +165,8 @@ describe("the workspace shell", () => {
     vi.stubGlobal("fetch", fetch);
     renderAt("/w/1/library");
 
-    fireEvent.change(await screen.findByLabelText("New workspace name"), {
+    fireEvent.click(await screen.findByRole("button", { name: /walker's workspace/ }));
+    fireEvent.change(screen.getByLabelText("New workspace name"), {
       target: { value: "My Fork" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Fork this" }));
