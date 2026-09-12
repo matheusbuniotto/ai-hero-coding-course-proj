@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "./api";
 import type { FileContent, Me, WorkspaceDetail } from "./api";
@@ -113,6 +113,9 @@ export function Shell({ me, workspaceId, view, reloadMe }: ShellProps) {
   return (
     <div className="shell">
       <header className="topbar">
+        <Link to="/" className="home-link">
+          All projects
+        </Link>
         <WorkspaceSwitcher
           me={me}
           workspaceId={workspaceId}

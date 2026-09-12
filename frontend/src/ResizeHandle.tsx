@@ -23,18 +23,21 @@ export function ResizeHandle({ orientation, onDrag, label }: ResizeHandleProps) 
     }
     function handleUp() {
       draggingRef.current = false;
+      document.body.classList.remove("is-resizing");
     }
     window.addEventListener("pointermove", handleMove);
     window.addEventListener("pointerup", handleUp);
     return () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
+      document.body.classList.remove("is-resizing");
     };
   }, [orientation]);
 
   function onPointerDown(event: React.PointerEvent) {
     draggingRef.current = true;
     lastPosRef.current = orientation === "vertical" ? event.clientX : event.clientY;
+    document.body.classList.add("is-resizing");
   }
 
   return (

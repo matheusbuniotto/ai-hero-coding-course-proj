@@ -54,7 +54,7 @@ afterEach(() => {
 
 describe("the workspace shell", () => {
   it("shows the signed-in email, the current workspace and the role", async () => {
-    renderAt("/");
+    renderAt("/w/1/library");
     const topbar = within(await screen.findByRole("banner"));
 
     expect(await topbar.findByText("walker@example.com")).toBeDefined();
@@ -178,6 +178,52 @@ describe("the workspace shell", () => {
 
     await waitFor(() => expect(window.location.assign).toHaveBeenCalledWith(LOGIN_URL));
     expect(screen.queryByText(/Error/)).toBeNull();
+  });
+});
+
+describe("the projects home", () => {
+  it("lists the projects the user has access to, as cards", async () => {
+    renderAt("/");
+
+    expect(await screen.findByRole("button", { name: /walker's workspace/ })).toBeDefined();
+    expect(await screen.findByRole("button", { name: /Team Wiki/ })).toBeDefined();
+  });
+
+  it("filters projects by kind", async () => {
+    renderAt("/");
+    await screen.findByRole("button", { name: /Team Wiki/ });
+
+    fireEvent.click(screen.getByRole("button", { name: "Team" }));
+
+    expect(screen.getByRole("button", { name: /Team Wiki/ })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /walker's workspace/ })).toBeNull();
+  });
+
+  it("opens a workspace when its card is clicked", async () => {
+    renderAt("/");
+    fireEvent.click(await screen.findByRole("button", { name: /walker's workspace/ }));
+
+    const topbar = within(await screen.findByRole("banner"));
+    expect(await topbar.findByText(/walker's workspace/, { selector: ".workspace-name" }))
+      .toBeDefined();
+  });
+
+  it("offers starter templates, clearly marked as not built yet", async () => {
+    renderAt("/");
+
+    const template = await screen.findByRole("button", { name: /Blank project/ });
+    expect(within(template).getByText("Coming soon")).toBeDefined();
+
+    fireEvent.click(template);
+    expect(await screen.findByText(/templates are coming soon/)).toBeDefined();
+  });
+
+  it("gets back to the projects home from inside a workspace", async () => {
+    renderAt("/w/1/library");
+
+    fireEvent.click(await screen.findByRole("link", { name: "All projects" }));
+
+    expect(await screen.findByRole("button", { name: /Team Wiki/ })).toBeDefined();
   });
 });
 
